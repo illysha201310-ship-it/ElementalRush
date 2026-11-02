@@ -1,10 +1,20 @@
 {
+  "id": "/ElementalRush/",
   "name": "Elemental Rush",
   "short_name": "Elemental Rush",
+  "description": "Combine fire, water, earth and air into 70+ spells. A cozy action roguelite for phone and PC. Стихии: соединяй стихии в 70+ заклинаний.",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#120e18",
   "theme_color": "#1c1426",
-  "icons": [{ "src": "icon.png", "sizes": "256x256", "type": "image/png", "purpose": "any maskable" }]
+  "categories": ["games", "entertainment"],
+  "lang": "ru",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }
