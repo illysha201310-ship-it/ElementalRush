@@ -9,16 +9,23 @@ const zoom = () => (CFG.device === "phone" ? 1.6 : 1);   // на телефон�
 function resize() {
   DPR = Math.min(2, window.devicePixelRatio || 1);
   const w = window.innerWidth, h = window.innerHeight;
-  // логическая высота 720; ширина подстраивается под экран (телефон в альбомной ориентации шире)
+  // вырезы экрана (чёлка / Dynamic Island) — интерфейс не залезает под них
+  const sd = document.getElementById("safe"), cs = sd ? getComputedStyle(sd) : null;
+  const ins = (k) => (cs ? parseFloat(cs["padding" + k]) || 0 : 0);
+  const sl = ins("Left"), sr = ins("Right"), st = ins("Top"), sb = ins("Bottom");
+  const uw = Math.max(100, w - sl - sr), uh = Math.max(100, h - st - sb);
+  // логическая высота 720; ширина подстраивается под экран без ограничения — кадр во весь экран
   V.H = 720;
-  V.W = Math.max(960, Math.min(1700, Math.round(720 * w / h)));
-  if (w / h < 1) { V.W = 960; V.H = Math.round(960 * h / w); }   // портрет: больше высоты
-  SCALE = Math.min(w / V.W, h / V.H);
-  OFFX = (w - V.W * SCALE) / 2; OFFY = (h - V.H * SCALE) / 2;
+  V.W = Math.max(960, Math.min(2600, Math.round(720 * uw / uh)));
+  if (uw / uh < 1) { V.W = 960; V.H = Math.round(960 * uh / uw); }   // портрет: больше высоты
+  SCALE = Math.min(uw / V.W, uh / V.H);
+  OFFX = sl + (uw - V.W * SCALE) / 2; OFFY = st + (uh - V.H * SCALE) / 2;
   cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
   cv.style.width = w + "px"; cv.style.height = h + "px";
 }
 window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => setTimeout(resize, 250));
+if (window.visualViewport) window.visualViewport.addEventListener("resize", resize);
 resize();
 
 // ---------------------------------------------------------------- утилиты

@@ -137,6 +137,7 @@ function isaacTick(dt) {
   const p = GS.player, F = GS.floor;
   // шипы ранят
   const m = roomAt(p.x, p.y);
+  if (p.dashT > 0) hitProps(p.x, p.y, 34);   // рывок разносит ящики и горшки
   if (m && m.obst && p.dashT <= 0) for (const o of m.obst) if (o.type === "spikes" && p.x > o.x && p.x < o.x + o.w && p.y > o.y && p.y < o.y + o.h) hurtPlayer(8 + F.fi * 2);
   // пьедесталы
   for (const r of F.rooms) if (r.pedestals) for (const pd of r.pedestals) {
@@ -188,6 +189,13 @@ function isaacTick(dt) {
   if (GS.itemBanner) { GS.itemBanner.t -= dt; if (GS.itemBanner.t <= 0) GS.itemBanner = null; }
 }
 // снаряд/удар по горшкам и ящикам
+function nearestProp(x, y, maxR) {
+  const m = roomAt(x, y);
+  if (!m || !m.props) return null;
+  let best = null, bd = maxR * maxR;
+  for (const o of m.props) { if (o.dead || o.type === "coin") continue; const d = (o.x - x) ** 2 + (o.y - y) ** 2; if (d < bd) { bd = d; best = o; } }
+  return best;
+}
 function hitProps(x, y, r) {
   const F = GS.floor, m = roomAt(x, y);
   if (!m || !m.props) return false;

@@ -123,15 +123,18 @@ function drawHero(c2, cls, x, y, t, face, atk, s = 1, glowCol = null) {
     c2.beginPath(); c2.arc(-5, hy - 12, 4.5, 0, 6.283); c2.fill(); c2.stroke();                                        // пучок
     c2.fillStyle = rgb(H.cape); c2.beginPath(); c2.moveTo(-8, hy - 12); c2.lineTo(-15 - wind, hy - 9); c2.lineTo(-13 - wind, hy - 6); c2.closePath(); c2.fill();
   }
-  // живые глаза: белок, радужка цвета героя, блик
-  for (const ex of [3.6, 8.6]) {
-    c2.fillStyle = "#fff"; c2.beginPath(); c2.ellipse(ex, hy + 1, 2, 2.6, 0, 0, 6.283); c2.fill();
-    c2.fillStyle = rgb(shade(H.eye, 0.7)); c2.beginPath(); c2.ellipse(ex + 0.5, hy + 1.3, 1.4, 2, 0, 0, 6.283); c2.fill();
-    c2.fillStyle = "#1c1210"; c2.beginPath(); c2.arc(ex + 0.6, hy + 1.4, 0.8, 0, 6.283); c2.fill();
-    c2.fillStyle = "#fff"; c2.beginPath(); c2.arc(ex + 0.1, hy + 0.4, 0.55, 0, 6.283); c2.fill();
+  // спокойное нейтральное лицо: глаза-овалы с бликом, ровные брови, лёгкий румянец
+  for (const ex of [3.8, 8.4]) {
+    c2.fillStyle = "#2a1c18"; c2.beginPath(); c2.ellipse(ex, hy + 1.2, 1.15, 1.7, 0, 0, 6.283); c2.fill();
+    c2.fillStyle = "rgba(255,255,255,0.9)"; c2.beginPath(); c2.arc(ex + 0.35, hy + 0.5, 0.45, 0, 6.283); c2.fill();
   }
-  c2.strokeStyle = LINE; c2.lineWidth = 1.1; c2.beginPath(); c2.moveTo(2, hy - 2.4); c2.lineTo(5, hy - 2.8); c2.moveTo(7.4, hy - 2.8); c2.lineTo(10, hy - 2.4); c2.stroke();
-  c2.beginPath(); c2.moveTo(5.5, hy + 5.4); c2.quadraticCurveTo(6.6, hy + 6.2, 7.6, hy + 5.4); c2.stroke();
+  c2.fillStyle = "rgba(230,120,110,0.28)";
+  c2.beginPath(); c2.ellipse(2.4, hy + 4.2, 1.8, 1, 0, 0, 6.283); c2.ellipse(9.8, hy + 4.2, 1.8, 1, 0, 0, 6.283); c2.fill();
+  c2.strokeStyle = rgb(shade(H.hair, 0.7)); c2.lineWidth = 0.9;
+  c2.beginPath(); c2.moveTo(2.6, hy - 1.9); c2.lineTo(5, hy - 2); c2.moveTo(7.2, hy - 2); c2.lineTo(9.6, hy - 1.9); c2.stroke();
+  c2.strokeStyle = "rgba(60,36,30,0.75)"; c2.lineWidth = 0.8;
+  c2.beginPath(); c2.moveTo(5.4, hy + 5.6); c2.lineTo(7.4, hy + 5.6); c2.stroke();
+  c2.strokeStyle = LINE;
   c2.lineWidth = 1.8;
   // рука и оружие (взмах при атаке)
   const a = atk > 0 ? -1.6 + (1 - atk) * 3 : 0.3;

@@ -337,7 +337,7 @@ function drawCards() {
 
 // ================================================================ меню
 function drawMenuBg() {
-  if (!MENU.bg) { MENU.bg = makeGround("forest", 1800, 1100); }
+  if (!MENU.bg || MENU.bg.width < V.W + 260 || MENU.bg.height < V.H + 140) { MENU.bg = makeGround("forest", Math.max(1800, V.W + 300), Math.max(1100, V.H + 200)); }
   const t = GS.t;
   ctx.drawImage(MENU.bg, 200 + Math.sin(t * 0.05) * 120, 100 + Math.cos(t * 0.04) * 60, V.W, V.H, 0, 0, V.W, V.H);
   drawAtmosphere(ctx, t * 20, 0, t, "forest");
@@ -362,7 +362,8 @@ function drawTitle() {
   button(cx + 10, 525, 150, 50, L("Звук: ", "Sound: ") + (CFG.sound > 0 ? L("вкл", "on") : L("выкл", "off")), () => { AUDIO.setVol(CFG.sound > 0 ? 0 : 0.7); MUSIC.setVol(CFG.sound > 0 ? 0.5 : 0); }, { size: 18 });
   const best = SAVE.get("bestFloor", 0);
   if (best) txt(L("Лучший результат: этаж ", "Best: floor ") + best, cx, 605, 16, "#ffe7b0", "center");
-  txt("v0.5 · web", V.W - 14, V.H - 16, 12, "#bfb2a0", "right");
+  if (IS_IOS && !STANDALONE) txt(L("Во весь экран: Safari → «Поделиться» → «На экран Домой»", "Fullscreen: Safari → Share → Add to Home Screen"), cx, 640, 15, "#ffe7b0", "center");
+  txt("v0.6 · web", V.W - 14, V.H - 16, 12, "#bfb2a0", "right");
 }
 function drawHeroes() {
   drawMenuBg();
@@ -389,8 +390,16 @@ function drawHeroes() {
   button(cx - 150, V.H - 100, 300, 70, L("В БОЙ!", "FIGHT!"), startRun, { col: [150, 96, 40], size: 30, font: TITLE });
   button(30, V.H - 90, 140, 52, L("Назад", "Back"), () => { MENU.screen = "title"; }, { size: 18 });
 }
-function startRun() { AUDIO.unlock(); newGame(MENU.sel); }
-function tryFullscreen() { const el = document.documentElement; if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => {}); }
+function startRun() { AUDIO.unlock(); if (CFG.device === "phone") tryFullscreen(); newGame(MENU.sel); }
+function tryFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  const f = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (f) { try { const r = f.call(el); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+  if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => {});
+}
+const IS_IOS = /iPhone|iPod/.test(navigator.userAgent);
+const STANDALONE = window.navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches);
 function drawPause() {
   ctx.fillStyle = "rgba(14,10,20,0.7)"; ctx.fillRect(0, 0, V.W, V.H);
   txt(L("Пауза", "Paused"), V.W / 2, 160, 52, "#ffd98a", "center", TITLE);

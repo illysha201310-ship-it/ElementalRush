@@ -1,5 +1,5 @@
 // Офлайн-кэш: сначала сеть (игроки всегда получают свежую версию), без интернета — сохранённая копия.
-const CACHE = "stihii-v0.5";
+const CACHE = "stihii-v0.61";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon.png", "icon-192.png", "icon-512.png", "js/data.js?v=0.5", "js/content.js?v=0.5", "js/core.js?v=0.5", "js/art.js?v=0.5", "js/game.js?v=0.5", "js/isaac.js?v=0.5", "js/dungeon.js?v=0.5", "js/ui.js?v=0.5"];
 self.addEventListener("install", (e) => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES))); });
 self.addEventListener("activate", (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));

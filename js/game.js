@@ -325,9 +325,13 @@ function basicAttack(dt) {
   B.cd -= dt;
   if (B.cd > 0) return;
   const [ax, ay] = aimPoint();
-  const ang = Math.atan2(ay - (p.y - 20), ax - p.x);
-  const near = nearestEnemy(p.x, p.y, p.cls === "archer" || p.cls === "mage" ? 650 : 150);
-  if (!near) return;
+  const range = p.cls === "archer" || p.cls === "mage" ? 650 : 150;
+  let near = nearestEnemy(p.x, p.y, range), ang = Math.atan2(ay - (p.y - 20), ax - p.x);
+  if (!near) {   // врагов нет — герой сам бьёт ящики и горшки рядом
+    near = nearestProp(p.x, p.y, p.cls === "archer" || p.cls === "mage" ? 420 : 130);
+    if (!near) return;
+    ang = Math.atan2(near.y - 10 - (p.y - 20), near.x - p.x);
+  }
   const rate = 0.85 / (1 + 0.15 * B.rate), dm = p.dmgMult * Math.pow(1.25, B.dmg);
   p.face = Math.cos(ang) >= 0 ? 1 : -1; p.atk = 1;
   if (p.cls === "warrior" || p.cls === "duelist") {
