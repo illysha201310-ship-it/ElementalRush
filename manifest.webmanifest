@@ -1,6 +1,6 @@
 {
-  "name": "Стихии — эволюция стихий",
-  "short_name": "Стихии",
+  "name": "Elemental Rush",
+  "short_name": "Elemental Rush",
   "start_url": "./index.html",
   "display": "fullscreen",
   "orientation": "landscape",

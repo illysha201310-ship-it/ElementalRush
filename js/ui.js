@@ -320,8 +320,8 @@ function drawTitle() {
   drawMenuBg();
   const t = GS.t, cx = V.W / 2;
   ["F", "W", "E", "A", "L"].forEach((e, i) => { const a = t * 0.5 + i * 1.2566; elemIcon(ctx, e, cx + Math.cos(a) * 330, 140 + Math.sin(a) * 60, 20); });
-  txt(L("СТИХИИ", "STIHII"), cx, 130, 96, "#ffd98a", "center", TITLE);
-  txt(L("эволюция стихий", "elemental evolution"), cx, 200, 26, "#fff0d6", "center", TITLE);
+  txt("ELEMENTAL RUSH", cx, 128, 84, "#ffd98a", "center", TITLE);
+  txt(L("Стихии · эволюция стихий", "combine the elements"), cx, 198, 26, "#fff0d6", "center", TITLE);
   // выбор устройства
   txt(L("Где играешь?", "Where do you play?"), cx, 270, 22, "#f2e6d0", "center");
   button(cx - 250, 295, 240, 74, L("💻  Компьютер", "💻  Computer"), () => { CFG.device = "pc"; saveCfg(); }, { sel: CFG.device === "pc", size: 24 });
