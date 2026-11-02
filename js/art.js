@@ -33,91 +33,146 @@ function shadowAt(c2, x, y, w) {
   c2.fillStyle = "rgba(30,40,40,0.28)"; c2.beginPath(); c2.ellipse(x, y, w, w * 0.35, 0, 0, Math.PI * 2); c2.fill();
 }
 
-// ================================================================ герои (чиби, нарисованы кодом)
+// ================================================================ герои (стильные, чуть мрачнее, без кукольности)
 const HEROES = {
-  warrior: { ru: "Воин", en: "Warrior", skin: [255, 220, 190], hair: [120, 70, 40], main: [186, 196, 214], accent: [200, 56, 52], weapon: "sword",
-    d_ru: "Огромный меч: медленно, но сокрушительно. Удары лечат.", d_en: "A huge sword: slow but crushing. Hits heal you.", hp: 150, speed: 205 },
-  archer: { ru: "Лучница", en: "Archer", skin: [255, 226, 200], hair: [236, 206, 120], main: [86, 150, 92], accent: [150, 110, 60], weapon: "bow",
-    d_ru: "Эльфийский лук: меткие стрелы издалека.", d_en: "Elven bow: accurate arrows from afar.", hp: 115, speed: 225 },
-  mage: { ru: "Маг", en: "Mage", skin: [255, 222, 196], hair: [90, 70, 110], main: [76, 104, 186], accent: [255, 214, 110], weapon: "staff",
-    d_ru: "Посох стихий: огненные шары, стихии сильнее.", d_en: "Staff of elements: fireballs, stronger elements.", hp: 110, speed: 210 },
-  duelist: { ru: "Дуэлянтка", en: "Duelist", skin: [255, 228, 210], hair: [40, 30, 50], main: [120, 80, 150], accent: [255, 160, 190], weapon: "twin",
-    d_ru: "Парные клинки: быстрые серии и ритм.", d_en: "Twin blades: fast combos and rhythm.", hp: 125, speed: 230 },
+  warrior: { ru: "Страж пепла", en: "Ash Warden", main: [74, 78, 92], trim: [176, 150, 96], cape: [128, 28, 34], eye: [255, 150, 60], weapon: "sword",
+    d_ru: "Тяжёлый двуручник. Медленно, но каждый удар сносит толпу и лечит.", d_en: "A heavy greatsword. Slow, but every swing clears the crowd and heals.", hp: 160, speed: 228 },
+  archer: { ru: "Охотница сумрака", en: "Dusk Huntress", main: [38, 58, 52], trim: [150, 120, 70], cape: [26, 40, 36], eye: [90, 255, 200], weapon: "bow",
+    d_ru: "Тихая смерть издалека: пробивающие стрелы и высокий крит.", d_en: "Silent death from afar: piercing arrows and high crit.", hp: 120, speed: 248 },
+  mage: { ru: "Чернокнижник стихий", en: "Element Warlock", main: [44, 36, 78], trim: [214, 170, 80], cape: [30, 24, 56], eye: [160, 200, 255], weapon: "staff",
+    d_ru: "Повелевает стихиями: навыки сильнее, огненные шары взрываются.", d_en: "Commands the elements: stronger skills, exploding fireballs.", hp: 112, speed: 234 },
+  duelist: { ru: "Клинок луны", en: "Moon Blade", main: [30, 26, 40], trim: [200, 60, 80], cape: [90, 20, 44], eye: [255, 90, 140], weapon: "twin",
+    d_ru: "Парные катаны: молниеносные серии и рывки сквозь врагов.", d_en: "Twin katanas: lightning-fast combos and dashes through enemies.", hp: 128, speed: 256 },
 };
+const SKIN = [236, 206, 184];
 
-function drawHero(c2, cls, x, y, t, face, atk, s = 1) {
+function drawHero(c2, cls, x, y, t, face, atk, s = 1, glowCol = null) {
   const H = HEROES[cls];
+  const gc = glowCol || H.eye;
   c2.save(); c2.translate(x, y); c2.scale(face * s, s);
-  const bob = Math.sin(t * 9) * 1.6, sway = Math.sin(t * 5) * 3;
-  // плащ / подол
-  c2.fillStyle = rgb(shade(H.accent, cls === "mage" ? 0.9 : 0.85));
-  c2.beginPath(); c2.moveTo(-10, -30 + bob); c2.quadraticCurveTo(-22 - sway, -6, -16 - sway, 4);
-  c2.lineTo(10, 4); c2.quadraticCurveTo(6, -14, 8, -30 + bob); c2.closePath(); c2.fill();
-  c2.strokeStyle = OUTLINE; c2.lineWidth = 1.6; c2.stroke();
-  // ноги
-  const st = Math.sin(t * 12) * 3;
-  c2.fillStyle = rgb(shade(H.main, 0.55));
-  c2.beginPath(); c2.roundRect(-8 + st * 0.3, -6, 6, 10, 3); c2.roundRect(2 - st * 0.3, -6, 6, 10, 3); c2.fill();
-  // тело
-  const body = c2.createLinearGradient(0, -34, 0, -2);
-  body.addColorStop(0, rgb(mixc(H.main, [255, 255, 255], 0.25))); body.addColorStop(1, rgb(shade(H.main, 0.8)));
-  c2.fillStyle = body; c2.beginPath(); c2.roundRect(-11, -34 + bob, 22, 30, 9); c2.fill(); c2.stroke();
-  if (cls === "warrior") {   // наплечники
-    blob(c2, -11, -30 + bob, 7, 5, [150, 160, 180], [230, 236, 246]); blob(c2, 11, -30 + bob, 7, 5, [150, 160, 180], [230, 236, 246]);
+  const bob = Math.sin(t * 10) * 1.4, wind = Math.sin(t * 6) * 4;
+  c2.lineJoin = "round";
+  c2.strokeStyle = "rgba(10,6,12,0.95)"; c2.lineWidth = 2.2;
+  // рваный плащ за спиной
+  c2.fillStyle = rgb(H.cape);
+  c2.beginPath(); c2.moveTo(-9, -46 + bob); c2.quadraticCurveTo(-24 - wind, -22, -22 - wind, 2);
+  for (let i = 0; i < 4; i++) c2.lineTo(-18 - wind + i * 7, (i % 2 ? -4 : 4));
+  c2.lineTo(8, -2); c2.quadraticCurveTo(6, -24, 8, -46 + bob); c2.closePath(); c2.fill(); c2.stroke();
+  c2.fillStyle = rgb(mixc(H.cape, [255, 255, 255], 0.12)); c2.beginPath(); c2.moveTo(-6, -44 + bob); c2.quadraticCurveTo(-14 - wind, -24, -12 - wind, -6); c2.lineTo(-8, -8); c2.quadraticCurveTo(-8, -26, -2, -44 + bob); c2.fill();
+  // ноги (шаг)
+  const st = Math.sin(t * 13) * 4;
+  c2.fillStyle = rgb(shade(H.main, 0.7));
+  c2.beginPath(); c2.moveTo(-7, -18); c2.lineTo(-9 + st, 0); c2.lineTo(-3 + st, 0); c2.lineTo(-1, -18); c2.closePath(); c2.fill(); c2.stroke();
+  c2.beginPath(); c2.moveTo(1, -18); c2.lineTo(3 - st, 0); c2.lineTo(9 - st, 0); c2.lineTo(7, -18); c2.closePath(); c2.fill(); c2.stroke();
+  // торс: вытянутый, с поясом и окантовкой
+  const body = c2.createLinearGradient(-10, -48, 10, -14);
+  body.addColorStop(0, rgb(mixc(H.main, [255, 255, 255], 0.22))); body.addColorStop(1, rgb(shade(H.main, 0.75)));
+  c2.fillStyle = body;
+  c2.beginPath(); c2.moveTo(-11, -46 + bob); c2.lineTo(11, -46 + bob); c2.lineTo(9, -16); c2.lineTo(-9, -16); c2.closePath(); c2.fill(); c2.stroke();
+  c2.fillStyle = rgb(H.trim); c2.fillRect(-9, -22, 18, 3);
+  c2.strokeStyle = rgb(H.trim, 0.8); c2.lineWidth = 1.2; c2.beginPath(); c2.moveTo(0, -45 + bob); c2.lineTo(0, -23); c2.stroke();
+  c2.strokeStyle = "rgba(10,6,12,0.95)"; c2.lineWidth = 2.2;
+  if (cls === "warrior") {             // массивные наплечники с шипом
+    for (const k of [-1, 1]) {
+      c2.fillStyle = rgb(shade(H.main, 1.15)); c2.beginPath(); c2.ellipse(k * 12, -44 + bob, 8, 6, k * 0.3, 0, 6.283); c2.fill(); c2.stroke();
+      c2.fillStyle = rgb(H.trim); c2.beginPath(); c2.moveTo(k * 14, -49 + bob); c2.lineTo(k * 19, -56 + bob); c2.lineTo(k * 11, -50 + bob); c2.fill();
+    }
   }
-  if (cls === "duelist") { c2.fillStyle = rgb(H.accent); c2.fillRect(-11, -18 + bob, 22, 4); }
-  // голова
-  const hy = -46 + bob;
-  blob(c2, 0, hy, 14, 13, shade(H.skin, 0.92), H.skin);
-  // волосы
-  c2.fillStyle = rgb(H.hair);
-  c2.beginPath(); c2.moveTo(-14, hy + 2); c2.quadraticCurveTo(-15, hy - 16, 0, hy - 15); c2.quadraticCurveTo(15, hy - 16, 14, hy - 2);
-  c2.quadraticCurveTo(6, hy - 8, -2, hy - 6); c2.quadraticCurveTo(-8, hy - 4, -14, hy + 2); c2.fill(); c2.stroke();
-  if (cls === "archer") {     // капюшон и ушко эльфа
-    c2.fillStyle = rgb(shade(H.main, 0.85));
-    c2.beginPath(); c2.moveTo(-16, hy + 6); c2.quadraticCurveTo(-18, hy - 20, 2, hy - 19); c2.quadraticCurveTo(14, hy - 18, 15, hy - 6);
-    c2.quadraticCurveTo(4, hy - 13, -9, hy - 8); c2.closePath(); c2.fill(); c2.stroke();
-    c2.fillStyle = rgb(H.skin); c2.beginPath(); c2.moveTo(12, hy); c2.lineTo(21, hy - 6); c2.lineTo(13, hy + 4); c2.fill(); c2.stroke();
+  if (cls === "duelist") { c2.fillStyle = rgb(H.trim); c2.beginPath(); c2.moveTo(-9, -24); c2.lineTo(9, -27); c2.lineTo(9, -23); c2.lineTo(-9, -20); c2.fill(); }
+  // голова: меньше, взрослее; лицо в тени капюшона / шлема
+  const hy = -56 + bob;
+  if (cls === "warrior") {             // рогатый шлем с забралом
+    c2.fillStyle = rgb(shade(H.main, 1.1)); c2.beginPath(); c2.moveTo(-9, hy + 6); c2.quadraticCurveTo(-11, hy - 10, 0, hy - 12); c2.quadraticCurveTo(11, hy - 10, 9, hy + 6); c2.closePath(); c2.fill(); c2.stroke();
+    c2.fillStyle = rgb(H.trim);
+    for (const k of [-1, 1]) { c2.beginPath(); c2.moveTo(k * 8, hy - 6); c2.quadraticCurveTo(k * 18, hy - 12, k * 16, hy - 22); c2.quadraticCurveTo(k * 13, hy - 12, k * 6, hy - 9); c2.fill(); c2.stroke(); }
+    c2.fillStyle = "#0b0810"; c2.fillRect(-1, hy - 3, 10, 3);
+  } else if (cls === "archer") {       // острый капюшон и маска
+    c2.fillStyle = rgb(SKIN); c2.beginPath(); c2.ellipse(1, hy, 7.5, 8.5, 0, 0, 6.283); c2.fill();
+    c2.fillStyle = rgb(shade(H.main, 1.15)); c2.beginPath(); c2.moveTo(-10, hy + 9); c2.quadraticCurveTo(-12, hy - 12, 2, hy - 18 - wind * 0.2); c2.quadraticCurveTo(12, hy - 8, 10, hy + 2);
+    c2.quadraticCurveTo(4, hy - 6, -4, hy - 3); c2.closePath(); c2.fill(); c2.stroke();
+    c2.fillStyle = rgb(shade(H.main, 0.6)); c2.beginPath(); c2.moveTo(-2, hy + 2); c2.lineTo(9, hy + 1); c2.lineTo(8, hy + 7); c2.lineTo(0, hy + 8); c2.fill();
+  } else if (cls === "mage") {         // глубокий капюшон, лицо в тени
+    c2.fillStyle = rgb(shade(H.main, 1.2)); c2.beginPath(); c2.moveTo(-11, hy + 9); c2.quadraticCurveTo(-13, hy - 13, 1, hy - 16); c2.quadraticCurveTo(14, hy - 12, 11, hy + 9); c2.closePath(); c2.fill(); c2.stroke();
+    c2.fillStyle = "#0d0a16"; c2.beginPath(); c2.ellipse(2, hy + 1, 7, 7.5, 0, 0, 6.283); c2.fill();
+    c2.strokeStyle = rgb(H.trim); c2.lineWidth = 1.4; c2.beginPath(); c2.moveTo(-10, hy + 8); c2.quadraticCurveTo(-12, hy - 11, 1, hy - 14); c2.stroke();
+    c2.strokeStyle = "rgba(10,6,12,0.95)"; c2.lineWidth = 2.2;
+  } else {                             // длинные белые волосы и хвост
+    c2.fillStyle = rgb(SKIN); c2.beginPath(); c2.ellipse(1, hy, 7.5, 8.5, 0, 0, 6.283); c2.fill(); c2.stroke();
+    c2.fillStyle = "#e8e4f0";
+    c2.beginPath(); c2.moveTo(-8, hy + 4); c2.quadraticCurveTo(-10, hy - 12, 2, hy - 11); c2.quadraticCurveTo(10, hy - 10, 9, hy - 2); c2.lineTo(6, hy - 5); c2.lineTo(3, hy - 1); c2.lineTo(-1, hy - 5); c2.closePath(); c2.fill(); c2.stroke();
+    c2.strokeStyle = "#e8e4f0"; c2.lineWidth = 4.5; c2.lineCap = "round";
+    c2.beginPath(); c2.moveTo(-7, hy - 6); c2.quadraticCurveTo(-22 - wind, hy - 2, -20 - wind * 1.5, hy + 18); c2.stroke();
+    c2.lineCap = "butt"; c2.strokeStyle = "rgba(10,6,12,0.95)"; c2.lineWidth = 2.2;
+    c2.fillStyle = rgb(H.trim); c2.beginPath(); c2.arc(-7, hy - 6, 2.4, 0, 6.283); c2.fill();
   }
-  if (cls === "mage") {       // шляпа со звездой
-    c2.fillStyle = rgb(shade(H.main, 0.9));
-    c2.beginPath(); c2.ellipse(0, hy - 10, 20, 5, 0, 0, Math.PI * 2); c2.fill(); c2.stroke();
-    c2.beginPath(); c2.moveTo(-12, hy - 11); c2.quadraticCurveTo(-2, hy - 36, 10 + sway * 0.5, hy - 38); c2.quadraticCurveTo(6, hy - 22, 12, hy - 11); c2.fill(); c2.stroke();
-    c2.fillStyle = rgb(H.accent); c2.beginPath(); c2.arc(1, hy - 20, 2.6, 0, Math.PI * 2); c2.fill();
-  }
-  if (cls === "duelist") {    // хвост волос
-    c2.strokeStyle = rgb(H.hair); c2.lineWidth = 5; c2.lineCap = "round";
-    c2.beginPath(); c2.moveTo(-10, hy - 8); c2.quadraticCurveTo(-24 - sway, hy - 2, -20 - sway, hy + 14); c2.stroke();
-    c2.lineCap = "butt"; c2.strokeStyle = OUTLINE;
-    c2.fillStyle = rgb(H.accent); c2.beginPath(); c2.arc(-10, hy - 9, 3, 0, Math.PI * 2); c2.fill();
-  }
-  if (cls === "warrior") { c2.fillStyle = rgb([160, 166, 180]); c2.beginPath(); c2.roundRect(-12, hy - 15, 24, 6, 3); c2.fill(); c2.stroke(); }
-  // лицо: большие тёплые глаза
-  c2.fillStyle = "#2b1d1d";
-  c2.beginPath(); c2.ellipse(3, hy + 1, 2.2, 3.2, 0, 0, Math.PI * 2); c2.ellipse(10, hy + 1, 2.2, 3.2, 0, 0, Math.PI * 2); c2.fill();
-  c2.fillStyle = "#fff"; c2.beginPath(); c2.arc(3.8, hy - 0.4, 0.9, 0, Math.PI * 2); c2.arc(10.8, hy - 0.4, 0.9, 0, Math.PI * 2); c2.fill();
-  c2.fillStyle = "rgba(255,130,130,0.45)"; c2.beginPath(); c2.ellipse(1, hy + 6, 2.6, 1.6, 0, 0, Math.PI * 2); c2.ellipse(13, hy + 6, 2.6, 1.6, 0, 0, Math.PI * 2); c2.fill();
-  // оружие
-  const a = atk > 0 ? -1.2 + (1 - atk) * 2.4 : 0.25;
-  c2.save(); c2.translate(11, -22 + bob); c2.rotate(a);
+  // светящиеся глаза — главный акцент
+  const ey = cls === "warrior" ? hy - 1.5 : hy;
+  glow(c2, 5, ey, 9, gc, 0.9);
+  c2.fillStyle = rgb(mixc(gc, [255, 255, 255], 0.5));
+  c2.beginPath(); c2.moveTo(2, ey - 1); c2.lineTo(5, ey - 1.8); c2.lineTo(5, ey + 0.6); c2.closePath(); c2.fill();
+  c2.beginPath(); c2.moveTo(6.5, ey - 1.8); c2.lineTo(9.5, ey - 1); c2.lineTo(6.5, ey + 0.6); c2.closePath(); c2.fill();
+  // оружие, светится цветом стихии
+  const a = atk > 0 ? -1.5 + (1 - atk) * 2.8 : 0.35;
+  c2.save(); c2.translate(9, -34 + bob); c2.rotate(a);
   if (H.weapon === "sword") {
-    c2.fillStyle = "#e9eef6"; c2.beginPath(); c2.moveTo(-3, 0); c2.lineTo(-4, -40); c2.lineTo(0, -48); c2.lineTo(4, -40); c2.lineTo(3, 0); c2.fill(); c2.stroke();
-    c2.fillStyle = "#b8862e"; c2.fillRect(-8, -2, 16, 4); c2.fillStyle = "#6b3e2a"; c2.fillRect(-2, 2, 4, 9);
+    glow(c2, 0, -30, 26, gc, 0.45);
+    c2.fillStyle = "#c9ced8"; c2.beginPath(); c2.moveTo(-4, 0); c2.lineTo(-5, -44); c2.lineTo(0, -54); c2.lineTo(5, -44); c2.lineTo(4, 0); c2.closePath(); c2.fill(); c2.stroke();
+    c2.strokeStyle = rgb(gc, 0.9); c2.lineWidth = 1.5; c2.beginPath(); c2.moveTo(0, -6); c2.lineTo(0, -46); c2.stroke();
+    c2.strokeStyle = "rgba(10,6,12,0.95)"; c2.lineWidth = 2.2;
+    c2.fillStyle = rgb(H.trim); c2.beginPath(); c2.moveTo(-10, -1); c2.lineTo(10, -1); c2.lineTo(7, 3); c2.lineTo(-7, 3); c2.closePath(); c2.fill(); c2.stroke();
+    c2.fillStyle = "#3a2420"; c2.fillRect(-2, 3, 4, 10);
   } else if (H.weapon === "bow") {
-    c2.strokeStyle = "#8a5a2e"; c2.lineWidth = 3; c2.beginPath(); c2.arc(4, -8, 16, -1.3, 1.3); c2.stroke();
-    c2.strokeStyle = "#f4ecd6"; c2.lineWidth = 1; c2.beginPath(); c2.moveTo(4 + 16 * Math.cos(-1.3), -8 + 16 * Math.sin(-1.3)); c2.lineTo(4 + 16 * Math.cos(1.3), -8 + 16 * Math.sin(1.3)); c2.stroke();
+    c2.strokeStyle = "#2c1f18"; c2.lineWidth = 4; c2.beginPath(); c2.arc(5, -8, 19, -1.35, 1.35); c2.stroke();
+    c2.strokeStyle = rgb(H.trim); c2.lineWidth = 1.5; c2.beginPath(); c2.arc(5, -8, 19, -1.35, 1.35); c2.stroke();
+    const sx = 5 + 19 * Math.cos(1.35), sy = 19 * Math.sin(1.35);
+    glow(c2, sx, -8, 14, gc, 0.5);
+    c2.strokeStyle = rgb(mixc(gc, [255, 255, 255], 0.4)); c2.lineWidth = 1.2; c2.beginPath(); c2.moveTo(sx, -8 - sy); c2.lineTo(sx, -8 + sy); c2.stroke();
   } else if (H.weapon === "staff") {
-    c2.strokeStyle = "#7a4e2a"; c2.lineWidth = 3.5; c2.beginPath(); c2.moveTo(0, 12); c2.lineTo(0, -36); c2.stroke();
-    glow(c2, 0, -40, 22, [255, 200, 120], 0.9); blob(c2, 0, -40, 5, 5, [255, 170, 80], [255, 250, 210]);
+    c2.strokeStyle = "#2a1c18"; c2.lineWidth = 4; c2.beginPath(); c2.moveTo(0, 14); c2.lineTo(0, -40); c2.stroke();
+    c2.strokeStyle = rgb(H.trim); c2.lineWidth = 2; c2.beginPath(); c2.moveTo(-5, -40); c2.quadraticCurveTo(0, -52, 5, -40); c2.stroke();
+    glow(c2, 0, -46, 28, gc, 0.95); blob(c2, 0, -46, 5, 5, gc, [255, 255, 255], false);
+    for (let i = 0; i < 3; i++) { const aa = t * 3 + i * 2.1; c2.fillStyle = rgb(gc, 0.8); c2.beginPath(); c2.arc(Math.cos(aa) * 10, -46 + Math.sin(aa) * 6, 1.6, 0, 6.283); c2.fill(); }
   } else {
     for (const k of [-1, 1]) {
-      c2.save(); c2.rotate(k * 0.35);
-      c2.fillStyle = "#eef2fb"; c2.beginPath(); c2.moveTo(-1.5, 0); c2.quadraticCurveTo(-3, -22, 2, -36); c2.lineTo(1.5, 0); c2.fill(); c2.stroke();
-      c2.fillStyle = rgb(H.accent); c2.fillRect(-3, -1, 6, 3);
+      c2.save(); c2.rotate(k * 0.4);
+      glow(c2, 0, -22, 18, gc, 0.4);
+      c2.fillStyle = "#dde2ee"; c2.beginPath(); c2.moveTo(-1.5, 0); c2.quadraticCurveTo(-3.5, -26, 2, -42); c2.lineTo(1.5, 0); c2.closePath(); c2.fill(); c2.stroke();
+      c2.strokeStyle = rgb(gc, 0.8); c2.lineWidth = 1; c2.beginPath(); c2.moveTo(0, -4); c2.quadraticCurveTo(-1.5, -24, 1.5, -38); c2.stroke();
+      c2.strokeStyle = "rgba(10,6,12,0.95)"; c2.lineWidth = 2.2;
+      c2.fillStyle = rgb(H.trim); c2.fillRect(-3.5, -1, 7, 3); c2.fillStyle = "#1a1018"; c2.fillRect(-1.5, 2, 3, 8);
       c2.restore();
     }
   }
   c2.restore();
+  c2.restore();
+}
+
+// эмблема игры: тёмный медальон, четыре стихии, светящееся сердце и острые лучи
+function drawEmblem(c2, cx, cy, R, t = 0) {
+  c2.save(); c2.translate(cx, cy);
+  glow(c2, 0, 0, R * 1.6, [255, 170, 80], 0.35);
+  const g = c2.createRadialGradient(0, -R * 0.3, R * 0.1, 0, 0, R);
+  g.addColorStop(0, "#3a2c4e"); g.addColorStop(1, "#120c1a");
+  c2.fillStyle = g; c2.beginPath(); c2.arc(0, 0, R, 0, 6.283); c2.fill();
+  c2.lineWidth = R * 0.06; c2.strokeStyle = "#c79a4c"; c2.stroke();
+  c2.lineWidth = R * 0.02; c2.strokeStyle = "rgba(255,220,150,0.5)"; c2.beginPath(); c2.arc(0, 0, R * 0.86, 0, 6.283); c2.stroke();
+  const els = ["F", "W", "E", "A"];
+  els.forEach((e, i) => {
+    const a = -Math.PI / 2 + i * Math.PI / 2 + t * 0.2;
+    const col = hexRGB(DATA.elements[e].color);
+    c2.fillStyle = rgb(col, 0.85);
+    c2.beginPath(); c2.moveTo(Math.cos(a - 0.22) * R * 0.25, Math.sin(a - 0.22) * R * 0.25);
+    c2.lineTo(Math.cos(a) * R * 0.8, Math.sin(a) * R * 0.8); c2.lineTo(Math.cos(a + 0.22) * R * 0.25, Math.sin(a + 0.22) * R * 0.25); c2.closePath(); c2.fill();
+    glow(c2, Math.cos(a) * R * 0.62, Math.sin(a) * R * 0.62, R * 0.28, col, 0.6);
+  });
+  for (let i = 0; i < 4; i++) {
+    const a = -Math.PI / 4 + i * Math.PI / 2 + t * 0.2;
+    c2.fillStyle = "rgba(255,230,180,0.55)";
+    c2.beginPath(); c2.moveTo(Math.cos(a - 0.12) * R * 0.22, Math.sin(a - 0.12) * R * 0.22); c2.lineTo(Math.cos(a) * R * 0.55, Math.sin(a) * R * 0.55);
+    c2.lineTo(Math.cos(a + 0.12) * R * 0.22, Math.sin(a + 0.12) * R * 0.22); c2.closePath(); c2.fill();
+  }
+  glow(c2, 0, 0, R * 0.5, [255, 220, 150], 0.9);
+  c2.fillStyle = "#fff4dc"; c2.beginPath(); c2.moveTo(0, -R * 0.2); c2.lineTo(R * 0.13, 0); c2.lineTo(0, R * 0.2); c2.lineTo(-R * 0.13, 0); c2.closePath(); c2.fill();
   c2.restore();
 }
 
@@ -353,5 +408,6 @@ function elemIcon(c2, e, x, y, r) {
   glow(c2, x, y, r * 1.8, col, 0.4);
   blob(c2, x, y, r, r, shade(col, 0.85), lt);
   c2.fillStyle = "rgba(255,255,255,0.9)"; c2.font = `bold ${Math.round(r * 1.05)}px sans-serif`; c2.textAlign = "center"; c2.textBaseline = "middle";
-  c2.fillText({ F: "🔥", W: "💧", E: "⛰", A: "🌀", L: "⚡", D: "🌑", C: "💎", K: "🩸", N: "🌿" }[e] || e, x, y + 1);
+  c2.fillText({ F: "🔥", W: "💧", E: "⛰", A: "🌀", L: "⚡", D: "🌑", C: "💎", K: "🩸", N: "🌿", S: "♪", O: "☀", G: "🪐", V: "🌋", Y: "⏳",
+    M: "⚙", P: "☠", I: "❄", Q: "💥", H: "💨", T: "⌛", X: "🕳", U: "👻" }[e] || e, x, y + 1);
 }

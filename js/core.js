@@ -163,3 +163,10 @@ const MUSIC = {
   },
   setVol(v) { CFG.music = v; if (this.gain) this.gain.gain.value = v * 0.18; saveCfg(); },
 };
+
+// защита: отрицательный радиус в анимации не должен ронять игру
+(() => {
+  const P = CanvasRenderingContext2D.prototype, arc = P.arc, ell = P.ellipse;
+  P.arc = function (x, y, r, a0, a1, ccw) { return arc.call(this, x, y, r > 0 ? r : 0, a0, a1, ccw); };
+  P.ellipse = function (x, y, rx, ry, rot, a0, a1, ccw) { return ell.call(this, x, y, rx > 0 ? rx : 0, ry > 0 ? ry : 0, rot, a0, a1, ccw); };
+})();

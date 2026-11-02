@@ -54,14 +54,15 @@ function recColor(r) {
 // ---------------------------------------------------------------- новая игра
 function newGame(cls) {
   const H = HEROES[cls];
-  GS.player = { x: ARENA.w / 2, y: ARENA.h / 2, r: 16, cls, face: 1, t: 0, atk: 0, hp: H.hp, maxhp: H.hp, baseSpeed: H.speed, inv: 0,
+  GS.player = { x: 0, y: 0, r: 16, cls, face: 1, t: 0, atk: 0, hp: H.hp, maxhp: H.hp, baseSpeed: H.speed, inv: 0,
     dashCd: 0, charges: 2, dashT: 0, dvx: 0, dvy: 0, lvl: 1, xp: 0, counts: {}, perks: {}, basic: { cd: 0, count: 0, dmg: 0, rate: 0 },
     curseUntil: 0, invis: 0, hurtFlash: 0 };
   GS.branches = []; GS.abilities = []; GS.extra = [];
   GS.enemies = []; GS.projs = []; GS.zones = []; GS.strikes = []; GS.parts = []; GS.texts = []; GS.gems = []; GS.beams = []; GS.rings = []; GS.summons = [];
   GS.wave = 0; GS.biome = 0; GS.spawnLeft = 0; GS.spawnT = 0; GS.waveDelay = 2.5; GS.kills = 0; GS.time = 0; GS.banner = null; GS.shake = 0;
-  GS.cardQueue = []; GS.cards = null; GS.boss = null; GS.cam = { x: GS.player.x - V.W / 2, y: GS.player.y - V.H / 2 };
-  setBiome(0);
+  GS.cardQueue = []; GS.cards = null; GS.boss = null; GS.combo = 0; GS.comboT = 0; GS.hitstop = 0; GS.spawnFx = [];
+  setFloor(0);
+  GS.cardQueue = [];
   recalc();
   GS.mode = "play";
   GS.cardQueue.push("start");   // первая карточка — первая стихия
@@ -91,7 +92,7 @@ function recalc() {
   p.stunChance = Math.min(0.3, 0.05 * n("L"));
   p.magnet = 110 * (1 + 0.5 * (pk.magnet || 0));
   p.dashMax = 2 + (pk.dash || 0) + (dashKind() === "A" ? 1 : 0);
-  p.armor = Math.min(0.4, 0.02 * n("E") + 0.06 * (pk.armor || 0));
+  p.armor = Math.min(0.5, 0.02 * n("E") + 0.06 * (pk.armor || 0) + (p.cls === "warrior" ? 0.18 : p.cls === "duelist" ? 0.08 : 0));
   for (const a of GS.abilities) refreshAbility(a);
 }
 
@@ -156,8 +157,9 @@ function hitEnemy(e, dmg, o = {}) {
   if (e.dead) return 0;
   const p = GS.player;
   let crit = Math.random() < p.crit;
-  if (crit) dmg *= 2;
+  if (crit) { dmg *= 2; GS.hitstop = Math.max(GS.hitstop, 0.025); }
   if (e.curseUntil > GS.time) dmg *= 1.3;
+  dmg *= 1 + Math.min(0.3, GS.combo * 0.006);
   e.hp -= dmg; e.flash = 0.08;
   if (o.burn) { e.burnDps = Math.max(e.burnT > 0 ? e.burnDps : 0, o.burn[0] * p.dmgMult); e.burnT = Math.max(e.burnT, o.burn[1]); }
   if (o.slow) { e.slow = Math.min(e.slowT > 0 ? e.slow : 1, o.slow[0]); e.slowT = Math.max(e.slowT, o.slow[1]); }
@@ -165,13 +167,16 @@ function hitEnemy(e, dmg, o = {}) {
   if (o.knock && !e.boss) { const a = Math.atan2(e.y - (o.kx ?? p.y) , e.x - (o.kxx ?? p.x)); e.kx = Math.cos(a) * o.knock; e.ky = Math.sin(a) * o.knock; }
   if (o.curse) e.curseUntil = GS.time + o.curse;
   if (p.lifesteal) p.hp = Math.min(p.maxhp, p.hp + dmg * p.lifesteal * 0.3);
-  if (o.basic && p.cls === "warrior") p.hp = Math.min(p.maxhp, p.hp + 0.6);
+  if (o.basic && p.cls === "warrior") p.hp = Math.min(p.maxhp, p.hp + 0.9);
+  if (o.basic && p.cls === "duelist") p.hp = Math.min(p.maxhp, p.hp + 0.5);
   text(e.x + rnd(-10, 10), e.y - e.r - 14, Math.round(dmg), crit ? [255, 214, 90] : [255, 248, 230], crit);
   if (e.hp <= 0) killEnemy(e);
   return dmg;
 }
 function killEnemy(e) {
   e.dead = true; GS.kills++;
+  GS.combo++; GS.comboT = 2.5;
+  if (e.boss || GS.combo % 25 === 0) GS.hitstop = e.boss ? 0.25 : 0.06;
   burst(e.x, e.y - e.r * 0.5, e.col, e.boss ? 60 : 14, e.boss ? 380 : 180);
   const xp = (DATA.enemies[e.kind] || {}).xp || 1;
   for (let i = 0; i < Math.min(8, xp); i++) GS.gems.push({ x: e.x + rnd(-14, 14), y: e.y + rnd(-14, 14), v: Math.max(1, Math.round(xp / Math.min(8, xp))), t: 0 });
@@ -192,7 +197,7 @@ function hurtPlayer(dmg) {
   AUDIO.play("hurt");
   if (p.hp <= 0) { p.hp = 0; GS.mode = "dead"; GS.deadT = 0; saveBest(); }
 }
-function saveBest() { const b = SAVE.get("best", 0); if (GS.wave > b) SAVE.set("best", GS.wave); }
+function saveBest() { const f = (GS.floor ? GS.floor.fi : 0) + 1, b = SAVE.get("bestFloor", 0); if (f > b) SAVE.set("bestFloor", f); }
 
 // ---------------------------------------------------------------- эффекты
 function burst(x, y, col, n, sp) {
@@ -215,6 +220,10 @@ const DASHES = {
   "": ["Рывок", "Dash"], F: ["Огненный след", "Flame Trail"], W: ["Волна прилива", "Tidal Wave"], E: ["Таран", "Ram"],
   A: ["Порыв ветра", "Gale Step"], L: ["Молния", "Lightning Blink"], D: ["Теневой шаг", "Shadow Step"], C: ["Кристальный путь", "Crystal Path"],
   K: ["Кровавый рывок", "Blood Rush"], N: ["Цепкие корни", "Root Dash"],
+  S: ["Звуковой барьер", "Sound Barrier"], O: ["Вспышка", "Flash Step"], G: ["Гравитационный удар", "Gravity Slam"],
+  V: ["Лавовый след", "Lava Trail"], Y: ["Песчаный вихрь", "Sand Swirl"], M: ["Стальной шквал", "Steel Flurry"],
+  P: ["Ядовитый след", "Venom Trail"], I: ["Ледяной шаг", "Frost Step"], Q: ["Сейсмоудар", "Quake Slam"],
+  H: ["Дымовой шаг", "Smoke Step"], T: ["Замедление времени", "Time Warp"], X: ["Шаг пустоты", "Void Step"], U: ["Дух-хранитель", "Guardian Spirit"],
 };
 function dashKind() {
   const c = GS.player ? GS.player.counts : {}; let best = "", bn = 0;
@@ -231,7 +240,7 @@ function doDash() {
   AUDIO.play("dash");
   if (k === "L") {                      // мгновенная молния: телепорт и цепь разрядов
     const sx = p.x, sy = p.y;
-    p.x = clamp(p.x + mx * 270, 40, ARENA.w - 40); p.y = clamp(p.y + my * 270, 40, ARENA.h - 40);
+    for (let d = 270; d > 0; d -= 30) { if (walkable(sx + mx * d, sy + my * d, p.r)) { p.x = sx + mx * d; p.y = sy + my * d; break; } }
     GS.beams.push({ x1: sx, y1: sy - 20, x2: p.x, y2: p.y - 20, col, life: 0.25 });
     let cur = { x: p.x, y: p.y }; const hit = new Set();
     for (let j = 0; j < 4; j++) {
@@ -246,12 +255,17 @@ function doDash() {
   p.dashKind = k; p.dashHit = new Set(); p.dashTrail = 0;
   p.inv = Math.max(p.inv, p.dashT + 0.1);
   if (k === "D") { p.invis = 1.2; p.inv = 1.2; }
+  if (k === "H") { p.invis = 0.9; GS.zones.push({ x: p.x, y: p.y, r: 120, dur: 3, t: 0, dps: 8 * p.dmgMult, col: [170, 170, 185], slow: [0.5, 0.6], tick: 0, friendly: true }); }
+  if (k === "O") { ring(p.x, p.y, 150, col, 0.4); for (const e of GS.enemies) if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 150 * 150) hitEnemy(e, 12 * p.dmgMult, { stun: 0.7 }); p.hp = Math.min(p.maxhp, p.hp + p.maxhp * 0.04); }
+  if (k === "T") { ring(p.x, p.y, 260, col, 0.6); for (const e of GS.enemies) if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 260 * 260) { e.slow = 0.3; e.slowT = 2.5; } }
+  if (k === "U") { p.hp = Math.min(p.maxhp, p.hp + p.maxhp * 0.06); ring(p.x, p.y, 70, col, 0.5); }
 }
 function dashTick(dt) {
   const p = GS.player, k = p.dashKind, col = k ? hexRGB(DATA.elements[k].color) : [230, 230, 255];
-  p.x = clamp(p.x + p.dvx * dt, 30, ARENA.w - 30); p.y = clamp(p.y + p.dvy * dt, 30, ARENA.h - 30);
+  moveIn(p, p.x + p.dvx * dt, p.y + p.dvy * dt, p.r);
   for (let i = 0; i < 3; i++) GS.parts.push({ x: p.x + rnd(-8, 8), y: p.y - rnd(5, 40), vx: -p.dvx * 0.05, vy: -p.dvy * 0.05, life: 0.4, max: 0.4, col, size: rnd(3, 6), g: true });
   p.dashTrail -= dt;
+  if ((k === "V" || k === "P") && p.dashTrail <= 0) { p.dashTrail = 0.05; GS.zones.push({ x: p.x, y: p.y, r: 44, dur: 2.6, t: 0, dps: (k === "V" ? 24 : 18) * p.dmgMult, col, burn: k === "V" ? [6, 2] : [5, 3], tick: 0, friendly: true }); }
   if (k === "F" && p.dashTrail <= 0) { p.dashTrail = 0.045; GS.zones.push({ x: p.x, y: p.y, r: 46, dur: 2.2, t: 0, dps: 18 * p.dmgMult, col: [255, 120, 50], kind: "fire", tick: 0, friendly: true }); }
   if (k === "C" && p.dashTrail <= 0) { p.dashTrail = 0.06; GS.strikes.push({ x: p.x, y: p.y, r: 60, delay: 0.55, t: 0, dmg: 26 * p.dmgMult, col: [220, 150, 255], kind: "crystal" }); }
   for (const e of GS.enemies) {
@@ -262,6 +276,8 @@ function dashTick(dt) {
     else if (k === "E") hitEnemy(e, base * 2, { stun: 1.0 });
     else if (k === "K") { hitEnemy(e, base * 1.5); p.hp = Math.min(p.maxhp, p.hp + p.maxhp * 0.03); }
     else if (k === "N") hitEnemy(e, base, { stun: 1.5 });
+    else if (k === "I") hitEnemy(e, base, { stun: 1.1, slow: [0.5, 2] });
+    else if (k === "X") { if (e.hp < e.maxhp * 0.18 && !e.boss) hitEnemy(e, e.hp + 1); else hitEnemy(e, base * 2); }
     else if (k === "D") hitEnemy(e, base, { curse: 4 });
     else if (k) hitEnemy(e, base);
   }
@@ -270,6 +286,10 @@ function dashTick(dt) {
     if (k === "E") { ring(p.x, p.y, 150, col, 0.4); GS.shake = 6; for (const e of GS.enemies) if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 150 * 150) hitEnemy(e, 20 * p.dmgMult, { stun: 0.8 }); AUDIO.play("boom"); }
     if (k === "A") for (let i = 0; i < 10; i++) shoot(p.x, p.y - 20, i / 10 * 6.283, { dmg: 9 * p.dmgMult, speed: 700, size: 6, col: [190, 245, 230], shape: "blade", pierce: 2, life: 0.6 });
     if (k === "W") ring(p.x, p.y, 120, col, 0.4);
+    if (k === "S" || k === "Q") { const R = k === "Q" ? 190 : 160; ring(p.x, p.y, R, col, 0.45); GS.shake = 7; for (const e of GS.enemies) if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < R * R) hitEnemy(e, (k === "Q" ? 26 : 14) * p.dmgMult, { stun: k === "S" ? 1.0 : 0.6, knock: 180 }); AUDIO.play("boom"); }
+    if (k === "G") { ring(p.x, p.y, 240, col, 0.5); GS.shake = 8; for (const e of GS.enemies) if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 260 * 260 && !e.boss) { moveIn(e, p.x + (e.x - p.x) * 0.25, p.y + (e.y - p.y) * 0.25, e.r * 0.6); hitEnemy(e, 22 * p.dmgMult, { stun: 0.5 }); } AUDIO.play("boom"); }
+    if (k === "Y") { GS.zones.push({ x: p.x, y: p.y, r: 140, dur: 2.5, t: 0, dps: 14 * p.dmgMult, col, slow: [0.45, 0.8], tick: 0, friendly: true, move: 60, ang: 0 }); }
+    if (k === "M") for (let i = 0; i < 8; i++) shoot(p.x, p.y - 20, i / 8 * 6.283, { dmg: 14 * p.dmgMult, speed: 820, size: 7, col: [220, 228, 240], shape: "blade", pierce: 3, life: 0.6 });
   }
 }
 
@@ -422,8 +442,8 @@ function spawnEnemy(kind, x, y, boss = false) {
   const D = DATA.enemies[kind] || DATA.enemies.ghoul;
   const k = 1 + GS.wave * 0.13, A = BIOME_ART[GS.bid];
   const base = hexRGB(DATA.elements[pick(["F", "W", "E", "A"])].color);
-  const e = { kind, x, y, r: boss ? Math.max(46, D.r * 1.5) : D.r * 1.15, hp: D.hp * k * (boss ? 14 : 1), dmg: D.dmg * (1 + GS.wave * 0.05) * (boss ? 1.4 : 1),
-    speed: D.speed * (boss ? 0.85 : 1), boss, flash: 0, stun: 0, slow: 1, slowT: 0, burnT: 0, burnDps: 0, kx: 0, ky: 0, t: rnd(0, 6), atk: rnd(1, 3),
+  const e = { kind, x, y, r: boss ? Math.max(46, D.r * 1.5) : D.r * 1.15, hp: D.hp * k * (boss ? (GS.floor && GS.floor.fi === 0 ? 3 : 4.5 + GS.floor.fi) : 1), dmg: D.dmg * (1 + GS.wave * 0.05) * (boss ? 1.4 : 1),
+    speed: D.speed * (boss ? 0.95 : 1.18), boss, flash: 0, stun: 0, slow: 1, slowT: 0, burnT: 0, burnDps: 0, kx: 0, ky: 0, t: rnd(0, 6), atk: rnd(1, 3),
     col: mixc(A.monster, base, 0.35), curseUntil: 0, ranged: RANGED.has(kind), pattern: 0 };
   e.maxhp = e.hp;
   GS.enemies.push(e);
@@ -435,14 +455,14 @@ function enemyTick(e, dt) {
   e.t += dt; e.flash -= dt;
   if (e.burnT > 0) { e.burnT -= dt; e.hp -= e.burnDps * dt; if (Math.random() < 0.3) GS.parts.push({ x: e.x + rnd(-6, 6), y: e.y - e.r, vx: 0, vy: -50, life: 0.4, max: 0.4, col: [255, 140, 60], size: 3, g: true }); if (e.hp <= 0) return killEnemy(e); }
   if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 1; }
-  e.x += e.kx * dt; e.y += e.ky * dt; e.kx *= Math.pow(0.02, dt); e.ky *= Math.pow(0.02, dt);
+  if (e.kx || e.ky) moveIn(e, e.x + e.kx * dt, e.y + e.ky * dt, e.r * 0.6); e.kx *= Math.pow(0.02, dt); e.ky *= Math.pow(0.02, dt);
   if (e.stun > 0) { e.stun -= dt; return; }
   const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
   let sp = e.speed * e.slow * (p.invis > 0 ? 0.3 : 1);
   if (e.boss) return bossTick(e, dt, dx, dy, d);
   if (e.ranged) {
     const want = d > 300 ? 1 : d < 220 ? -1 : 0;
-    e.x += dx / d * sp * want * dt; e.y += dy / d * sp * want * dt;
+    moveIn(e, e.x + dx / d * sp * want * dt, e.y + dy / d * sp * want * dt, e.r * 0.6);
     e.atk -= dt;
     if (e.atk <= 0 && d < 560 && p.invis <= 0) { e.atk = rnd(1.8, 2.8); shoot(e.x, e.y - e.r, Math.atan2(dy, dx), { dmg: e.dmg, speed: 260, size: 7, col: [200, 110, 255], friendly: false, life: 3 }); }
   } else {
@@ -450,7 +470,7 @@ function enemyTick(e, dt) {
       e.atk -= dt;
       if (e.atk <= 0 && d < 340) { e.atk = 3; e.kx = dx / d * 620; e.ky = dy / d * 620; }
     }
-    e.x += dx / d * sp * dt; e.y += dy / d * sp * dt;
+    moveIn(e, e.x + dx / d * sp * dt, e.y + dy / d * sp * dt, e.r * 0.6);
   }
   if (d < e.r + p.r) {
     if (e.kind === "bomber") { ring(e.x, e.y, 90, [255, 140, 60], 0.4); hurtPlayer(e.dmg * 2); killEnemy(e); return; }
@@ -459,7 +479,7 @@ function enemyTick(e, dt) {
 }
 function bossTick(e, dt, dx, dy, d) {
   const sp = e.speed * e.slow;
-  e.x += dx / d * sp * 0.7 * dt; e.y += dy / d * sp * 0.7 * dt;
+  moveIn(e, e.x + dx / d * sp * 0.75 * dt, e.y + dy / d * sp * 0.75 * dt, e.r * 0.6);
   e.atk -= dt;
   const phase2 = e.hp < e.maxhp * 0.5;
   if (e.atk <= 0) {
@@ -469,7 +489,7 @@ function bossTick(e, dt, dx, dy, d) {
     if (e.pattern === 0) { const n = phase2 ? 22 : 16, off = rnd(0, 1); for (let i = 0; i < n; i++) shoot(e.x, e.y - e.r, (i + off) / n * 6.283, { dmg: e.dmg * 0.6, speed: 220, size: 9, col, friendly: false, life: 5 }); }
     else if (e.pattern === 1) { const a0 = Math.atan2(dy, dx); for (let i = -3; i <= 3; i++) shoot(e.x, e.y - e.r, a0 + i * 0.16, { dmg: e.dmg * 0.6, speed: 330, size: 8, col: [255, 200, 120], friendly: false, life: 4 }); }
     else if (e.pattern === 2) { for (let i = 0; i < (phase2 ? 7 : 5); i++) GS.strikes.push({ x: GS.player.x + rnd(-160, 160), y: GS.player.y + rnd(-120, 120), r: 80, delay: 0.9, t: 0, dmg: e.dmg, col: [255, 90, 90], kind: "meteor", enemy: true }); }
-    else { const kinds = Object.keys(DATA.biomes[GS.biome].kinds); for (let i = 0; i < 4; i++) spawnEnemy(pick(kinds), e.x + rnd(-90, 90), e.y + rnd(-90, 90)); }
+    else { const kinds = Object.keys(DATA.biomes[GS.biome].kinds); for (let i = 0; i < 4; i++) { const x = e.x + rnd(-90, 90), y = e.y + rnd(-90, 90); if (walkable(x, y, 10)) GS.spawnFx.push({ x, y, t: 0.5, kind: pick(kinds) }); } }
   }
   if (d < e.r + GS.player.r) hurtPlayer(e.dmg);
 }
@@ -547,6 +567,7 @@ function elementCard(e) {
     const old = br[i] || "", [or] = resolve(old), [nr, nl] = resolve(old + e);
     const kind = !or ? "new" : nr.id !== or.id ? "evolve" : "level";
     if (kind === "level" && nl >= MAXLVL && old) continue;
+    if (br.some((s2, j) => j !== i && resolve(s2)[0].id === nr.id)) continue;
     const sc = { evolve: 3, new: i < 4 && br.length < 4 ? 2 : -1, level: 1 }[kind] + Math.random() * 0.9;
     if (kind === "new" && i !== br.length) continue;
     if (!best || sc > best.sc) best = { sc, row: i, kind, rec: nr, lvl: nl, e };
@@ -559,7 +580,12 @@ function elementCard(e) {
 }
 function rollCards(kind) {
   const p = GS.player;
-  if (kind === "start") return ORDER.map((e) => elementCard(e)).filter(Boolean);
+  if (kind === "start") return ORDER.slice().sort(() => Math.random() - 0.5).slice(0, 4).map((e) => elementCard(e)).filter(Boolean);
+  if (kind === "chest") {
+    const all = elemsAvail().map((e) => elementCard(e)).filter(Boolean).sort((a, b) => b.rar - a.rar + Math.random() - 0.5).slice(0, 3);
+    all.forEach((c) => (c.rar = Math.max(c.rar, 2)));
+    return all;
+  }
   if (kind === "unlock") {
     const left = DATA.extra.filter((e) => !GS.extra.includes(e));
     return left.sort(() => Math.random() - 0.5).slice(0, 3).map((e) => ({ type: "unlock", e, rar: 3, title: nm(DATA.elements[e]),
@@ -599,12 +625,12 @@ function chooseCard(i) {
   GS.cards = null;
   if (GS.cardQueue.length) { openCards(); return; }
   GS.mode = "play";
-  if (GS.wave === 0) startWave();
 }
 
 // ---------------------------------------------------------------- шаг симуляции
 function update(dt) {
   GS.t += dt;
+  if (GS.hitstop > 0 && GS.mode === "play") { GS.hitstop -= dt; return; }
   if (GS.mode !== "play") { if (GS.mode === "cards") GS.cardT += dt; if (GS.mode === "dead") GS.deadT += dt; return; }
   GS.time += dt;
   const p = GS.player;
@@ -616,7 +642,7 @@ function update(dt) {
   if (p.dashT > 0) dashTick(dt);
   else {
     const [mx, my] = moveVector();
-    p.x = clamp(p.x + mx * p.speed * dt, 30, ARENA.w - 30); p.y = clamp(p.y + my * p.speed * dt, 30, ARENA.h - 30);
+    moveIn(p, p.x + mx * p.speed * dt, p.y + my * p.speed * dt, p.r);
     if (mx) p.face = mx > 0 ? 1 : -1;
     p.moving = !!(mx || my);
   }
@@ -649,12 +675,13 @@ function update(dt) {
   if (GS.avatarBloom) { GS.avatarBloom.t += dt; if (GS.avatarBloom.t > 0.9) GS.avatarBloom = null; }
   if (GS.banner) { GS.banner.t -= dt; if (GS.banner.t <= 0) GS.banner = null; }
   GS.shake = Math.max(0, GS.shake - 30 * dt);
-  waveTick(dt);
+  roomTick(dt);
+  if (GS.comboT > 0) { GS.comboT -= dt; if (GS.comboT <= 0) GS.combo = 0; }
   // камера
   const Z = zoom(), vw = V.W / Z, vh = V.H / Z;
   const tx = p.x - vw / 2, ty = p.y - 30 - vh / 2;
   GS.cam.x += (tx - GS.cam.x) * Math.min(1, dt * 7); GS.cam.y += (ty - GS.cam.y) * Math.min(1, dt * 7);
-  GS.cam.x = clamp(GS.cam.x, -60, ARENA.w - vw + 60); GS.cam.y = clamp(GS.cam.y, -60, ARENA.h - vh + 60);
+  GS.cam.x = clamp(GS.cam.x, -200, GS.floor.w - vw + 200); GS.cam.y = clamp(GS.cam.y, -200, GS.floor.h - vh + 200);
 }
 function projTick(dt) {
   const p = GS.player;
@@ -677,7 +704,7 @@ function projTick(dt) {
         if (q.split) for (let i = 0; i < q.split; i++) shoot(q.x, q.y, rnd(0, 6.28), { dmg: q.dmg * 0.4, speed: 450, size: Math.max(3, q.r * 0.6), col: q.col, life: 0.5 });
       }
     } else if ((p.x - q.x) ** 2 + (p.y - 20 - q.y) ** 2 < (p.r + q.r) ** 2) { hurtPlayer(q.dmg); q.life = 0; }
-    if (q.x < -50 || q.y < -50 || q.x > ARENA.w + 50 || q.y > ARENA.h + 50) q.life = 0;
+    if (!walkable(q.x, q.y, 0)) { if (q.life > 0 && q.explode && q.friendly) q.life = 0.0001; else q.life = 0; }
   }
   GS.projs = GS.projs.filter((q) => q.life > 0);
 }

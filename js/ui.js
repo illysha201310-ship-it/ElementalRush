@@ -46,12 +46,13 @@ function drawWorld(dt) {
   const p = GS.player, sx = GS.shake ? rnd(-GS.shake, GS.shake) : 0, sy = GS.shake ? rnd(-GS.shake, GS.shake) : 0;
   const cx = Math.round(GS.cam.x + sx), cy = Math.round(GS.cam.y + sy);
   const Z = zoom(), vw = V.W / Z, vh = V.H / Z;
-  ctx.fillStyle = "#1c2420"; ctx.fillRect(0, 0, V.W, V.H);
+  const vc = VOID_ART[GS.bid] || [16, 20, 18];
+  const bg = ctx.createRadialGradient(V.W / 2, V.H / 2, 100, V.W / 2, V.H / 2, V.W * 0.8);
+  bg.addColorStop(0, rgb(shade(vc, 1.5))); bg.addColorStop(1, rgb(vc));
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, V.W, V.H);
   ctx.save(); ctx.scale(Z, Z);
-  ctx.drawImage(GS.ground, cx, cy, vw, vh, 0, 0, vw, vh);
   ctx.translate(-cx, -cy);
-  // край мира — мягкая тень
-  ctx.strokeStyle = "rgba(20,30,20,0.5)"; ctx.lineWidth = 40; ctx.strokeRect(-20, -20, ARENA.w + 40, ARENA.h + 40);
+  drawFloor(cx, cy, vw, vh);
   for (const z of GS.zones) drawZone(z);
   for (const s of GS.strikes) if (!s.done) {
     const k = s.t / s.delay;
@@ -102,7 +103,9 @@ function drawPlayer() {
   shadowAt(ctx, p.x, p.y + 2, 18);
   if (p.invis > 0) ctx.globalAlpha = 0.45;
   if (p.inv > 0 && p.dashT <= 0 && Math.floor(GS.t * 20) % 2) ctx.globalAlpha *= 0.6;
-  drawHero(ctx, p.cls, p.x, p.y, p.moving ? p.t : p.t * 0.25, p.face, p.atk, 1.05);
+  const dk = dashKind();
+  drawHero(ctx, p.cls, p.x, p.y, p.moving ? p.t : p.t * 0.25, p.face, p.atk, 1.0, dk ? hexRGB(DATA.elements[dk].color) : null);
+  if (p.dashT > 0) for (let i = 1; i <= 3; i++) { ctx.globalAlpha = 0.18 / i; drawHero(ctx, p.cls, p.x - p.dvx * 0.012 * i, p.y - p.dvy * 0.012 * i, p.t, p.face, 0, 1.0, null); ctx.globalAlpha = 1; }
   ctx.globalAlpha = 1;
   if (p.shield > 0) { ctx.strokeStyle = "rgba(170,220,255,0.7)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(p.x, p.y - 26, 34, 0, 6.283); ctx.stroke(); }
 }
@@ -214,7 +217,8 @@ function drawHUD() {
   ctx.fillStyle = "#8fd8ff"; ctx.fillRect(80, 50, 250 * p.xp / xpNext(p.lvl), 8);
   // волна и биом
   panel(V.W / 2 - 130, 10, 260, 48);
-  txt(L("Волна ", "Wave ") + GS.wave, V.W / 2, 28, 22, "#ffe7b0", "center", TITLE);
+  const cleared = GS.floor.rooms.filter((m) => m.state === "clear" && (m.kind === "fight" || m.kind === "boss")).length;
+  txt(L("Этаж ", "Floor ") + (GS.floor.fi + 1) + "  ·  " + cleared + "/5", V.W / 2, 28, 22, "#ffe7b0", "center", TITLE);
   txt(nm(DATA.biomes[GS.biome]), V.W / 2, 48, 12, "#d8cbb4", "center");
   if (GS.boss) {
     const e = GS.boss; panel(V.W / 2 - 260, 64, 520, 34);
@@ -248,6 +252,23 @@ function drawHUD() {
   for (let i = 0; i < p.dashMax; i++) { ctx.fillStyle = i < p.charges ? "#ffe7b0" : "rgba(255,255,255,0.2)"; ctx.beginPath(); ctx.arc(dcx - (p.dashMax - 1) * 7 + i * 14, dcy + dr - 10, 4, 0, 6.283); ctx.fill(); }
   txt(L(dn[0], dn[1]) + (phone ? "" : "  [Space]"), dcx, dcy + dr + 12, phone ? 16 : 11, "#ffe7b0", "center");
   if (phone) { BUTTONS.push([dx, dy, 140, 140, () => { IN.dash = true; }, "touch"]); }
+  drawMinimap();
+  const tg = nextTarget();
+  if (tg && !GS.cur) {
+    const Z = zoom(), sx2 = (tg.x - GS.cam.x) * Z, sy2 = (tg.y - GS.cam.y) * Z;
+    if (sx2 < 40 || sx2 > V.W - 40 || sy2 < 40 || sy2 > V.H - 40) {
+      const a = Math.atan2(sy2 - V.H / 2, sx2 - V.W / 2), ax = V.W / 2 + Math.cos(a) * Math.min(V.W, V.H) * 0.4, ay = V.H / 2 + Math.sin(a) * Math.min(V.W, V.H) * 0.4;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.fillStyle = "rgba(255,220,140,0.85)";
+      ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-10, -11); ctx.lineTo(-4, 0); ctx.lineTo(-10, 11); ctx.fill(); ctx.restore();
+    }
+  }
+  if (GS.combo >= 5) {
+    const k = Math.min(1, GS.comboT / 2.5);
+    ctx.globalAlpha = 0.4 + 0.6 * k;
+    txt("x" + GS.combo, V.W - 150, V.H * 0.42, 40 + Math.min(20, GS.combo / 3), GS.combo > 50 ? "#ff7a9a" : "#ffd98a", "center", TITLE);
+    txt(L("комбо  +", "combo  +") + Math.round(Math.min(30, GS.combo * 0.6)) + "%", V.W - 150, V.H * 0.42 + 34, 14, "#f2e6d0", "center");
+    ctx.globalAlpha = 1;
+  }
   // пауза
   button(V.W - 70, 12, 56, 46, "II", () => { GS.mode = "pause"; }, { touch: phone, size: 20 });
   // джойстик
@@ -319,21 +340,22 @@ function drawMenuBg() {
 function drawTitle() {
   drawMenuBg();
   const t = GS.t, cx = V.W / 2;
-  ["F", "W", "E", "A", "L"].forEach((e, i) => { const a = t * 0.5 + i * 1.2566; elemIcon(ctx, e, cx + Math.cos(a) * 330, 140 + Math.sin(a) * 60, 20); });
-  txt("ELEMENTAL RUSH", cx, 128, 84, "#ffd98a", "center", TITLE);
-  txt(L("Стихии · эволюция стихий", "combine the elements"), cx, 198, 26, "#fff0d6", "center", TITLE);
+  ["F", "W", "E", "A", "L", "S"].forEach((e, i) => { const a = t * 0.4 + i * 1.0472; elemIcon(ctx, e, cx + Math.cos(a) * 170, 112 + Math.sin(a) * 78, 15); });
+  drawEmblem(ctx, cx, 112, 64, t);
+  txt("ELEMENTAL RUSH", cx, 214, 64, "#ffd98a", "center", TITLE);
+  txt(L("Стихии · эволюция стихий", "combine the elements"), cx, 254, 20, "#fff0d6", "center", TITLE);
   // выбор устройства
-  txt(L("Где играешь?", "Where do you play?"), cx, 270, 22, "#f2e6d0", "center");
-  button(cx - 250, 295, 240, 74, L("💻  Компьютер", "💻  Computer"), () => { CFG.device = "pc"; saveCfg(); }, { sel: CFG.device === "pc", size: 24 });
-  button(cx + 10, 295, 240, 74, L("📱  Телефон", "📱  Phone"), () => { CFG.device = "phone"; saveCfg(); tryFullscreen(); }, { sel: CFG.device === "phone", size: 24 });
+  txt(L("Где играешь?", "Where do you play?"), cx, 290, 20, "#f2e6d0", "center");
+  button(cx - 250, 310, 240, 64, L("💻  Компьютер", "💻  Computer"), () => { CFG.device = "pc"; saveCfg(); }, { sel: CFG.device === "pc", size: 24 });
+  button(cx + 10, 310, 240, 64, L("📱  Телефон", "📱  Phone"), () => { CFG.device = "phone"; saveCfg(); tryFullscreen(); }, { sel: CFG.device === "phone", size: 24 });
   txt(CFG.device === "pc" ? L("WASD — ходьба · мышь — прицел · Пробел — рывок", "WASD — move · mouse — aim · Space — dash")
     : L("палец слева — ходьба · кнопка справа — рывок · атаки сами", "left thumb — move · right button — dash · attacks are automatic"), cx, 392, 15, "#d8cbb4", "center");
-  button(cx - 160, 430, 320, 80, L("ИГРАТЬ", "PLAY"), () => { MENU.screen = "heroes"; }, { col: [150, 96, 40], size: 34, font: TITLE, touch: false });
+  button(cx - 160, 420, 320, 80, L("ИГРАТЬ", "PLAY"), () => { MENU.screen = "heroes"; }, { col: [150, 96, 40], size: 34, font: TITLE, touch: false });
   button(cx - 160, 525, 150, 50, CFG.lang === "ru" ? "English" : "Русский", () => { CFG.lang = CFG.lang === "ru" ? "en" : "ru"; saveCfg(); }, { size: 18 });
   button(cx + 10, 525, 150, 50, L("Звук: ", "Sound: ") + (CFG.sound > 0 ? L("вкл", "on") : L("выкл", "off")), () => { AUDIO.setVol(CFG.sound > 0 ? 0 : 0.7); MUSIC.setVol(CFG.sound > 0 ? 0.5 : 0); }, { size: 18 });
-  const best = SAVE.get("best", 0);
-  if (best) txt(L("Лучший результат: волна ", "Best: wave ") + best, cx, 605, 16, "#ffe7b0", "center");
-  txt("v0.1 · web", V.W - 14, V.H - 16, 12, "#bfb2a0", "right");
+  const best = SAVE.get("bestFloor", 0);
+  if (best) txt(L("Лучший результат: этаж ", "Best: floor ") + best, cx, 605, 16, "#ffe7b0", "center");
+  txt("v0.3 · web", V.W - 14, V.H - 16, 12, "#bfb2a0", "right");
 }
 function drawHeroes() {
   drawMenuBg();
@@ -346,13 +368,14 @@ function drawHeroes() {
     const y = portrait ? 110 + Math.floor(i / 2) * (ch + 20) : 110;
     const sel = MENU.sel === id;
     const g = ctx.createLinearGradient(0, y, 0, y + ch);
-    g.addColorStop(0, rgb(mixc(H.accent, [40, 30, 50], 0.5))); g.addColorStop(1, "rgb(26,18,34)");
+    g.addColorStop(0, rgb(mixc(H.cape, [20, 14, 24], 0.3))); g.addColorStop(1, "rgb(16,12,22)");
     ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, cw, ch, 18); ctx.fill();
     ctx.strokeStyle = sel ? "#ffd56e" : "rgba(255,220,160,0.4)"; ctx.lineWidth = sel ? 4 : 1.5; ctx.stroke();
-    glow(ctx, x + cw / 2, y + ch * 0.38, 90, H.accent, sel ? 0.6 : 0.3);
+    glow(ctx, x + cw / 2, y + ch * 0.32, 90, H.eye, sel ? 0.45 : 0.18);
     shadowAt(ctx, x + cw / 2, y + ch * 0.52, 30);
-    drawHero(ctx, id, x + cw / 2, y + ch * 0.52, sel ? GS.t : 0, 1, sel ? (Math.sin(GS.t * 2) > 0.7 ? 0.5 : 0) : 0, 2.2);
-    txt(nm(H), x + cw / 2, y + ch * 0.62, 26, "#fff4e0", "center", TITLE);
+    drawHero(ctx, id, x + cw / 2, y + ch * 0.52, sel ? GS.t : 0, 1, sel ? (Math.sin(GS.t * 2) > 0.7 ? 0.5 : 0) : 0, 2.0);
+    let fs = 24; ctx.font = `bold ${fs}px ${TITLE}`; while (fs > 13 && ctx.measureText(nm(H)).width > cw - 16) { fs--; ctx.font = `bold ${fs}px ${TITLE}`; }
+    txt(nm(H), x + cw / 2, y + ch * 0.62, fs, "#fff4e0", "center", TITLE);
     wrapText(L(H.d_ru, H.d_en), x + cw / 2, y + ch * 0.72, cw - 30, 14, "#e6dac4", 1.35, "center");
     BUTTONS.push([x, y, cw, ch, () => { if (MENU.sel === id && CFG.device === "phone") startRun(); MENU.sel = id; }, "click"]);
   });
