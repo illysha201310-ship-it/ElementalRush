@@ -153,6 +153,9 @@ function drawOrbit(a) {
   const p = GS.player, P = a.p, n = P.count || 3, R = P.radius || 80;
   for (let i = 0; i < n; i++) {
     const ang = a.orbA + i / n * 6.283, x = p.x + Math.cos(ang) * R, y = p.y - 20 + Math.sin(ang) * R * 0.8;
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (let k = 1; k <= 6; k++) { const aa = ang - k * 0.09; ctx.fillStyle = rgb(a.color, 0.28 * (1 - k / 7)); ctx.beginPath(); ctx.arc(p.x + Math.cos(aa) * R, p.y - 20 + Math.sin(aa) * R * 0.8, (P.size || 10) * (1 - k / 9), 0, 6.283); ctx.fill(); }
+    ctx.restore();
     glow(ctx, x, y, (P.size || 10) * 3, a.color, 0.6);
     blob(ctx, x, y, P.size || 10, P.size || 10, a.color, mixc(a.color, [255, 255, 255], 0.6), false);
   }
@@ -177,6 +180,9 @@ function drawAvatar(a) {
   els.forEach((el, i) => {
     const ang = a.orbA + i * Math.PI / 2, x = p.x + Math.cos(ang) * 64, y = p.y - 30 + Math.sin(ang) * 40 + Math.sin(t * 3 + i) * 4;
     const col = hexRGB(DATA.elements[el].color), lt = hexRGB(DATA.elements[el].light);
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (let k = 1; k <= 7; k++) { const aa = ang - k * 0.1; ctx.fillStyle = rgb(col, 0.3 * (1 - k / 8)); ctx.beginPath(); ctx.arc(p.x + Math.cos(aa) * 64, p.y - 30 + Math.sin(aa) * 40, 7 * (1 - k / 9), 0, 6.283); ctx.fill(); }
+    ctx.restore();
     glow(ctx, x, y, 34, col, 0.75);
     if (el === "F") { ctx.fillStyle = rgb(lt); ctx.beginPath(); ctx.moveTo(x, y - 14); ctx.quadraticCurveTo(x + 9, y - 2, x, y + 8); ctx.quadraticCurveTo(x - 9, y - 2, x, y - 14); ctx.fill(); }
     else if (el === "W") { blob(ctx, x, y, 8, 9, col, lt, false); }
@@ -356,7 +362,7 @@ function drawTitle() {
   button(cx + 10, 525, 150, 50, L("Звук: ", "Sound: ") + (CFG.sound > 0 ? L("вкл", "on") : L("выкл", "off")), () => { AUDIO.setVol(CFG.sound > 0 ? 0 : 0.7); MUSIC.setVol(CFG.sound > 0 ? 0.5 : 0); }, { size: 18 });
   const best = SAVE.get("bestFloor", 0);
   if (best) txt(L("Лучший результат: этаж ", "Best: floor ") + best, cx, 605, 16, "#ffe7b0", "center");
-  txt("v0.3 · web", V.W - 14, V.H - 16, 12, "#bfb2a0", "right");
+  txt("v0.5 · web", V.W - 14, V.H - 16, 12, "#bfb2a0", "right");
 }
 function drawHeroes() {
   drawMenuBg();

@@ -85,7 +85,7 @@ function recalc() {
   p.maxhp = Math.round(H.hp + 12 * n("E") + 10 * n("N") + 25 * (pk.hp || 0));
   p.hp = Math.min(p.maxhp, p.hp + Math.max(0, p.maxhp - old));
   p.dmgMult = (1 + 0.06 * n("F") + 0.03 * n("D") + 0.03 * n("L")) * (1 + 0.15 * (pk.dmg || 0)) * (p.cls === "mage" ? 1.1 : 1);
-  p.speed = p.baseSpeed * (1 + 0.04 * n("A") + 0.1 * (pk.speed || 0));
+  p.speed = p.baseSpeed * 1.06 * (1 + 0.04 * n("A") + 0.1 * (pk.speed || 0));
   p.cdr = Math.max(0.4, (1 - 0.03 * n("A")) * Math.pow(0.9, pk.cdr || 0));
   p.regen = 0.25 * n("W") + 0.5 * n("N") + 0.8 * (pk.regen || 0);
   p.crit = Math.min(0.5, 0.04 * n("C") + (p.cls === "archer" ? 0.12 : 0));
@@ -171,7 +171,8 @@ function hitEnemy(e, dmg, o = {}) {
   if (crit) { dmg *= 2; GS.hitstop = Math.max(GS.hitstop, 0.025); }
   if (e.curseUntil > GS.time) dmg *= 1.3;
   dmg *= 1 + Math.min(0.3, GS.combo * 0.006);
-  e.hp -= dmg; e.flash = 0.08;
+  e.hp -= dmg; e.flash = 0.1;
+  if (GS.parts.length < 600) for (let i = 0; i < 3; i++) { const a = rnd(0, 6.283); GS.parts.push({ x: e.x, y: e.y - e.r * 0.6, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, life: 0.18, max: 0.18, col: [255, 250, 220], size: 2.2, g: true }); }
   if (o.burn) { e.burnDps = Math.max(e.burnT > 0 ? e.burnDps : 0, o.burn[0] * p.dmgMult); e.burnT = Math.max(e.burnT, o.burn[1]); }
   if (o.slow) { e.slow = Math.min(e.slowT > 0 ? e.slow : 1, o.slow[0]); e.slowT = Math.max(e.slowT, o.slow[1]); }
   if (o.stun || Math.random() < p.stunChance * (o.basic ? 0.5 : 1)) e.stun = Math.max(e.stun, o.stun || 0.4);
@@ -194,7 +195,9 @@ function killEnemy(e) {
   e.dead = true; GS.kills++;
   GS.combo++; GS.comboT = 2.5;
   if (e.boss || GS.combo % 25 === 0) GS.hitstop = e.boss ? 0.25 : 0.06;
-  burst(e.x, e.y - e.r * 0.5, e.col, e.boss ? 60 : 14, e.boss ? 380 : 180);
+  burst(e.x, e.y - e.r * 0.5, e.col, e.boss ? 60 : 18, e.boss ? 380 : 230);
+  ring(e.x, e.y - e.r * 0.5, e.r * 2.2, [255, 245, 225], 0.22);
+  GS.shake = Math.max(GS.shake, e.boss ? 16 : 1.6);
   const xp = (DATA.enemies[e.kind] || {}).xp || 1;
   for (let i = 0; i < Math.min(8, xp); i++) GS.gems.push({ x: e.x + rnd(-14, 14), y: e.y + rnd(-14, 14), v: Math.max(1, Math.round(xp / Math.min(8, xp))), t: 0 });
   if (Math.random() < (e.boss ? 1 : 0.015)) GS.gems.push({ x: e.x, y: e.y, heart: true, t: 0 });
@@ -325,7 +328,7 @@ function basicAttack(dt) {
   const ang = Math.atan2(ay - (p.y - 20), ax - p.x);
   const near = nearestEnemy(p.x, p.y, p.cls === "archer" || p.cls === "mage" ? 650 : 150);
   if (!near) return;
-  const rate = 1 / (1 + 0.15 * B.rate), dm = p.dmgMult * Math.pow(1.25, B.dmg);
+  const rate = 0.85 / (1 + 0.15 * B.rate), dm = p.dmgMult * Math.pow(1.25, B.dmg);
   p.face = Math.cos(ang) >= 0 ? 1 : -1; p.atk = 1;
   if (p.cls === "warrior" || p.cls === "duelist") {
     const R = p.cls === "warrior" ? 105 : 82, arc = p.cls === "warrior" ? 1.9 : 2.4, dmg = (p.cls === "warrior" ? 30 : 13) * dm;
@@ -424,7 +427,7 @@ function abilityTick(a, dt) {
 }
 function orbitTick(a, dt) {
   const p = GS.player, P = a.p, n = P.count || 3, R = P.radius || 80;
-  a.orbA += dt * (P.speed ? P.speed / 100 : 2.6);
+  a.orbA += dt * Math.max(3.6, P.speed ? P.speed / 100 : 0);
   for (let i = 0; i < n; i++) {
     const ang = a.orbA + i / n * 6.283, x = p.x + Math.cos(ang) * R, y = p.y - 20 + Math.sin(ang) * R * 0.8;
     for (const e of GS.enemies) {
@@ -438,7 +441,7 @@ function orbitTick(a, dt) {
 // ---- «Аватар стихий»: четыре духа на мандале, лучи в врагов и раз в три залпа — схождение стихий
 function avatarTick(a, dt) {
   const p = GS.player, P = a.p;
-  a.orbA += dt * 1.6;
+  a.orbA += dt * 3.2;
   a.cd -= dt;
   if (a.cd > 0) return;
   const tgts = GS.enemies.filter((e) => (e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 520 * 520).sort((u, v) => dist2(u, p) - dist2(v, p)).slice(0, 4);
@@ -717,7 +720,10 @@ function update(dt) {
   if (GS.comboT > 0) { GS.comboT -= dt; if (GS.comboT <= 0) GS.combo = 0; }
   // камера
   const Z = zoom(), vw = V.W / Z, vh = V.H / Z;
-  const tx = p.x - vw / 2, ty = p.y - 30 - vh / 2;
+  const [lmx, lmy] = moveVector();
+  GS.look = GS.look || { x: 0, y: 0 };
+  GS.look.x += (lmx * 90 - GS.look.x) * Math.min(1, dt * 3); GS.look.y += (lmy * 60 - GS.look.y) * Math.min(1, dt * 3);
+  const tx = p.x + GS.look.x - vw / 2, ty = p.y - 30 + GS.look.y - vh / 2;
   GS.cam.x += (tx - GS.cam.x) * Math.min(1, dt * 7); GS.cam.y += (ty - GS.cam.y) * Math.min(1, dt * 7);
   GS.cam.x = clamp(GS.cam.x, -200, GS.floor.w - vw + 200); GS.cam.y = clamp(GS.cam.y, -200, GS.floor.h - vh + 200);
 }

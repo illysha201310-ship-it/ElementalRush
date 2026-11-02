@@ -181,7 +181,7 @@ function isaacTick(dt) {
     if (e && D.cd <= 0) { D.cd = 0.55; shoot(D.x, D.y, Math.atan2(e.y - e.r * 0.5 - D.y, e.x - D.x), { dmg: 9 * p.dmgMult, speed: 760, size: 5, col: [150, 230, 255], life: 0.9 }); }
   }
   if (hasItem("eye")) {
-    GS.eyeA = (GS.eyeA || 0) + dt * 3;
+    GS.eyeA = (GS.eyeA || 0) + dt * 4.2;
     const ex = p.x + Math.cos(GS.eyeA) * 90, ey = p.y - 25 + Math.sin(GS.eyeA) * 70;
     for (const e of GS.enemies) if ((e.x - ex) ** 2 + (e.y - e.r * 0.5 - ey) ** 2 < (e.r + 14) ** 2 && (!e.eyeT || GS.time - e.eyeT > 0.4)) { e.eyeT = GS.time; hitEnemy(e, 14 * p.dmgMult, { knock: 80 }); }
   }
