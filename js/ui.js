@@ -234,7 +234,7 @@ function drawHUD() {
     txt(String(a.lvl), x + sw - 8, y0 + sw - 9, 13, "#ffe7b0", "center");
     const cdf = a.p.cd ? Math.max(0, a.cd / a.p.cd) : 0;
     if (cdf > 0.02) { ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(x, y0 + sw * (1 - cdf), sw, sw * cdf); }
-    if (!phone) txt(nm(a.rec), x + sw / 2, y0 - 9, 11, "#efe2c8", "center");
+    if (!phone) { const nmx = nm(a.rec); txt(nmx.length > 10 ? nmx.slice(0, 9) + "…" : nmx, x + sw / 2, y0 - 9, 11, "#efe2c8", "center"); }
   });
   // рывок: имя зависит от главной стихии
   const k = dashKind(), dn = DASHES[k] || DASHES[""];
