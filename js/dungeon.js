@@ -31,7 +31,7 @@ function makeFloor(fi, bid) {
     const w = kind === "boss" ? 1260 : kind === "fight" ? rndi(940, 1100) : 760, h = kind === "boss" ? 860 : kind === "fight" ? rndi(620, 720) : 540;
     const cx = c * CELL_W + CELL_W / 2, cy = (r - minR) * CELL_H + CELL_H / 2;
     return { i, kind, x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w, h, cx, cy, state: kind === "start" || kind === "treasure" ? "clear" : "idle",
-      seen: i === 0, waves: 0, chest: kind === "treasure" ? { open: false } : null, ground: makeGround(bid, w, h) };
+      seen: i === 0, waves: 0, chest: null, ground: makeGround(bid, w, h) };
   });
   const corrs = [];
   for (let i = 1; i < rooms.length; i++) {
@@ -49,14 +49,17 @@ function makeFloor(fi, bid) {
     corrs.push(c);
   }
   const maxX = Math.max(...rooms.map((r) => r.x + r.w)), maxY = Math.max(...rooms.map((r) => r.y + r.h));
-  return { fi, bid, rooms, corrs, w: maxX + 200, h: maxY + 200, portal: null };
+  const F = { fi, bid, rooms, corrs, w: maxX + 200, h: maxY + 200, portal: null };
+  addSideRooms(F, bid);
+  for (const m of F.rooms) decorateRoom(m, fi);
+  return F;
 }
 
-const corrOpen = (c) => c.a.state !== "fight" && c.b.state !== "fight";
+const corrOpen = (c) => !c.hidden && c.a.state !== "fight" && c.b.state !== "fight";
 // точка (с радиусом r) внутри проходимой зоны: комнаты минус стены, открытые коридоры
-function walkable(x, y, r = 0) {
+function walkable(x, y, r = 0, proj = false) {
   const F = GS.floor;
-  for (const m of F.rooms) if (x - r >= m.x + WALL && x + r <= m.x + m.w - WALL && y - r >= m.y + WALL && y + r <= m.y + m.h - WALL) return true;
+  for (const m of F.rooms) if (x - r >= m.x + WALL && x + r <= m.x + m.w - WALL && y - r >= m.y + WALL && y + r <= m.y + m.h - WALL) return !obstacleBlocks(m, x, y, r, proj);
   for (const c of F.corrs) {
     if (!corrOpen(c)) continue;
     // коридор заходит в комнаты с запасом (r + 6), чтобы на стыке не было «невидимой стены»
@@ -67,6 +70,18 @@ function walkable(x, y, r = 0) {
 }
 function moveIn(o, nx, ny, r) {
   if (walkable(nx, ny, r)) { o.x = nx; o.y = ny; return true; }
+  // упёрлись в камень/яму — огибаем его по касательной
+  const m = roomAt(o.x, o.y);
+  if (m && m.obst) {
+    const dx = nx - o.x, dy = ny - o.y, step = Math.hypot(dx, dy);
+    for (const ob of m.obst) {
+      if (ob.type === "spikes" || (nx - ob.x) ** 2 + (ny - ob.y) ** 2 >= (ob.r + r) ** 2) continue;
+      let tx = -(o.y - ob.y), ty = o.x - ob.x;
+      if (tx * dx + ty * dy < 0) { tx = -tx; ty = -ty; }
+      const tl = Math.hypot(tx, ty) || 1, sx = o.x + tx / tl * step, sy = o.y + ty / tl * step;
+      if (walkable(sx, sy, r)) { o.x = sx; o.y = sy; return false; }
+    }
+  }
   if (walkable(nx, o.y, r)) { o.x = nx; return false; }
   if (walkable(o.x, ny, r)) { o.y = ny; return false; }
   return false;
@@ -92,7 +107,7 @@ function roomTick(dt) {
   // вошёл в боевую комнату — двери закрываются
   const inner = roomAt(p.x, p.y, 110);
   if (inner && inner.state === "idle" && (inner.kind === "fight" || inner.kind === "boss")) {
-    inner.state = "fight"; GS.cur = inner; GS.shake = 6; AUDIO.play("boom");
+    inner.state = "fight"; GS.cur = inner; GS.shake = 6; AUDIO.play("boom"); p.shieldUsed = false;
     if (inner.kind === "boss") {
       const kind = DATA.bossOf[F.bid] || "brute";
       const [x, y] = randomInRoom(inner, p, 380);
@@ -113,7 +128,8 @@ function roomTick(dt) {
         cur.state = "clear"; GS.cur = null; AUDIO.play("level");
         GS.banner = { title: L("Комната зачищена!", "Room cleared!"), sub: "", t: 1.6 };
         for (let i = 0; i < 10; i++) GS.gems.push({ x: cur.cx + rnd(-80, 80), y: cur.cy + rnd(-60, 60), v: 2 + F.fi, t: 0 });
-        if (cur.kind === "boss") F.portal = { x: cur.cx, y: cur.cy, t: 0 };
+        if (cur.kind === "boss") { F.portal = { x: cur.cx, y: cur.cy + 120, t: 0 }; cur.pedestals = [{ x: cur.cx, y: cur.cy - 60, item: null }]; }
+        if (Math.random() < 0.35 && cur.kind === "fight") GS.gems.push({ x: cur.cx, y: cur.cy, heart: true, t: 0 });
         if (GS.cardQueue.length) openCards();
       }
     }
@@ -166,13 +182,13 @@ function drawFloor(cx, cy, vw, vh) {
   // стены: каменные блоки вокруг комнат и коридоров
   ctx.fillStyle = rgb(dark);
   for (const m of F.rooms) if (vis(m.x, m.y, m.w, m.h)) { ctx.beginPath(); ctx.roundRect(m.x - 6, m.y - 26, m.w + 12, m.h + 32, 18); ctx.fill(); }
-  for (const c of F.corrs) if (vis(c.x, c.y, c.w, c.h)) {
+  for (const c of F.corrs) if (!c.hidden && vis(c.x, c.y, c.w, c.h)) {
     if (c.horiz) ctx.fillRect(c.x, c.y - WALL - 18, c.w, c.h + 2 * WALL + 18); else ctx.fillRect(c.x - WALL, c.y, c.w + 2 * WALL, c.h);
   }
   ctx.fillStyle = rgb(stone);
   for (const m of F.rooms) if (vis(m.x, m.y, m.w, m.h)) { ctx.beginPath(); ctx.roundRect(m.x, m.y - 18, m.w, m.h + 18, 14); ctx.fill(); }
   // пол
-  for (const c of F.corrs) if (vis(c.x, c.y, c.w, c.h)) ctx.drawImage(c.ground, c.horiz ? c.x : c.x, c.horiz ? c.y : c.y, c.w, c.h);
+  for (const c of F.corrs) if (!c.hidden && vis(c.x, c.y, c.w, c.h)) ctx.drawImage(c.ground, c.horiz ? c.x : c.x, c.horiz ? c.y : c.y, c.w, c.h);
   for (const m of F.rooms) if (vis(m.x, m.y, m.w, m.h)) {
     ctx.drawImage(m.ground, WALL, WALL, m.w - 2 * WALL, m.h - 2 * WALL, m.x + WALL, m.y + WALL, m.w - 2 * WALL, m.h - 2 * WALL);
     // лицевая грань верхней стены и тень от неё
@@ -187,6 +203,8 @@ function drawFloor(cx, cy, vw, vh) {
       ctx.fillStyle = rgb(moss); ctx.beginPath(); ctx.arc(x, m.y - 16, rr - 1, 0, 6.283); ctx.fill();
     }
   }
+  drawCracks();
+  for (const m of F.rooms) if (vis(m.x, m.y, m.w, m.h)) drawRoomExtras(m);
   // запертые двери — светящиеся барьеры
   for (const c of F.corrs) {
     if (corrOpen(c) || !vis(c.x, c.y, c.w, c.h)) continue;
@@ -224,12 +242,14 @@ function drawMinimap() {
   const k = Math.min(200 / F.w, 120 / F.h), W = F.w * k + 16, H = F.h * k + 16, X = V.W - W - 14, Y = 64;
   ctx.fillStyle = "rgba(20,14,26,0.75)"; ctx.beginPath(); ctx.roundRect(X, Y, W, H, 10); ctx.fill();
   ctx.strokeStyle = "rgba(255,220,160,0.4)"; ctx.lineWidth = 1; ctx.stroke();
-  for (const c of F.corrs) if (c.a.seen || c.b.seen) { ctx.fillStyle = "rgba(220,200,170,0.6)"; ctx.fillRect(X + 8 + c.x * k, Y + 8 + c.y * k, Math.max(2, c.w * k), Math.max(2, c.h * k)); }
+  for (const c of F.corrs) if ((c.a.seen || c.b.seen) && (!c.hidden || hasItem("compass"))) { ctx.fillStyle = "rgba(220,200,170,0.6)"; ctx.fillRect(X + 8 + c.x * k, Y + 8 + c.y * k, Math.max(2, c.w * k), Math.max(2, c.h * k)); }
   for (const m of F.rooms) {
     if (!m.seen) continue;
     ctx.fillStyle = m.state === "fight" ? "#ff6a7a" : m.state === "clear" ? "rgba(140,220,150,0.85)" : "rgba(220,210,190,0.7)";
     ctx.fillRect(X + 8 + m.x * k, Y + 8 + m.y * k, m.w * k, m.h * k);
     if (m.kind === "boss") txt("☠", X + 8 + m.cx * k, Y + 8 + m.cy * k, 12, "#2a1018", "center", FONT, false);
+    if (m.kind === "shop") txt("●", X + 8 + m.cx * k, Y + 8 + m.cy * k, 11, "#7a5a10", "center", FONT, false);
+    if (m.kind === "secret") txt("?", X + 8 + m.cx * k, Y + 8 + m.cy * k, 11, "#3a1a50", "center", FONT, false);
     if (m.chest && !m.chest.open) txt("★", X + 8 + m.cx * k, Y + 8 + m.cy * k, 11, "#7a4a10", "center", FONT, false);
   }
   ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(X + 8 + p.x * k, Y + 8 + p.y * k, 3, 0, 6.283); ctx.fill();
@@ -238,6 +258,6 @@ function drawMinimap() {
 function nextTarget() {
   const F = GS.floor;
   if (F.portal) return F.portal;
-  const t = F.rooms.find((m) => m.state === "idle") || F.rooms.find((m) => m.chest && !m.chest.open);
+  const t = F.rooms.find((m) => m.state === "idle") || F.rooms.find((m) => m.kind === "treasure" && m.pedestals && !m.pedestals[0].taken);
   return t ? { x: t.cx, y: t.cy } : null;
 }

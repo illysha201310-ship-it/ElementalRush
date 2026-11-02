@@ -56,7 +56,7 @@ function newGame(cls) {
   const H = HEROES[cls];
   GS.player = { x: 0, y: 0, r: 16, cls, face: 1, t: 0, atk: 0, hp: H.hp, maxhp: H.hp, baseSpeed: H.speed, inv: 0,
     dashCd: 0, charges: 2, dashT: 0, dvx: 0, dvy: 0, lvl: 1, xp: 0, counts: {}, perks: {}, basic: { cd: 0, count: 0, dmg: 0, rate: 0 },
-    curseUntil: 0, invis: 0, hurtFlash: 0 };
+    curseUntil: 0, invis: 0, hurtFlash: 0, items: [], coins: 0 };
   GS.branches = []; GS.abilities = []; GS.extra = [];
   GS.enemies = []; GS.projs = []; GS.zones = []; GS.strikes = []; GS.parts = []; GS.texts = []; GS.gems = []; GS.beams = []; GS.rings = []; GS.summons = [];
   GS.wave = 0; GS.biome = 0; GS.spawnLeft = 0; GS.spawnT = 0; GS.waveDelay = 2.5; GS.kills = 0; GS.time = 0; GS.banner = null; GS.shake = 0;
@@ -64,9 +64,10 @@ function newGame(cls) {
   setFloor(0);
   GS.cardQueue = [];
   recalc();
-  GS.mode = "play";
   GS.cardQueue.push("start");   // первая карточка — первая стихия
-  openCards();
+  GS.drone = null;
+  if (!SAVE.get("storySeen", false)) { SAVE.set("storySeen", true); GS.mode = "story"; GS.storyI = 0; GS.storyT = 0; }
+  else { GS.mode = "play"; openCards(); }
 }
 function setBiome(i) {
   GS.biome = i;
@@ -93,6 +94,16 @@ function recalc() {
   p.magnet = 110 * (1 + 0.5 * (pk.magnet || 0));
   p.dashMax = 2 + (pk.dash || 0) + (dashKind() === "A" ? 1 : 0);
   p.armor = Math.min(0.5, 0.02 * n("E") + 0.06 * (pk.armor || 0) + (p.cls === "warrior" ? 0.18 : p.cls === "duelist" ? 0.08 : 0));
+  const it = (k) => (p.items || []).includes(k);
+  if (it("lens")) p.dmgMult *= 1.2;
+  if (it("boots")) p.speed *= 1.15;
+  if (it("hourglass")) p.cdr *= 0.85;
+  if (it("cat")) p.crit += 0.1;
+  if (it("horn")) p.dashMax += 1;
+  if (it("heart")) p.maxhp += 30;
+  if (it("star")) p.maxhp += 20;
+  if (it("magnet")) p.magnet *= 2.5;
+  if (it("fang")) p.lifesteal += 0.04;
   for (const a of GS.abilities) refreshAbility(a);
 }
 
@@ -167,6 +178,12 @@ function hitEnemy(e, dmg, o = {}) {
   if (o.knock && !e.boss) { const a = Math.atan2(e.y - (o.kx ?? p.y) , e.x - (o.kxx ?? p.x)); e.kx = Math.cos(a) * o.knock; e.ky = Math.sin(a) * o.knock; }
   if (o.curse) e.curseUntil = GS.time + o.curse;
   if (p.lifesteal) p.hp = Math.min(p.maxhp, p.hp + dmg * p.lifesteal * 0.3);
+  if (o.basic && p.items) {
+    if (hasItem("fireheart")) { e.burnDps = Math.max(e.burnDps, 5 * p.dmgMult); e.burnT = Math.max(e.burnT, 2); }
+    if (hasItem("icesoul")) { e.slow = Math.min(e.slowT > 0 ? e.slow : 1, 0.6); e.slowT = Math.max(e.slowT, 1.2); }
+    if (hasItem("stormstone") && Math.random() < 0.2) { const n = nearestEnemy(e.x + 1, e.y + 1, 220); if (n && n !== e) { GS.beams.push({ x1: e.x, y1: e.y - 20, x2: n.x, y2: n.y - 20, col: [255, 236, 110], life: 0.25 }); setTimeout(() => !n.dead && hitEnemy(n, dmg * 0.5), 0); } }
+    if (hasItem("mirror") && Math.random() < 0.12) setTimeout(() => !e.dead && hitEnemy(e, dmg * 0.5), 120);
+  }
   if (o.basic && p.cls === "warrior") p.hp = Math.min(p.maxhp, p.hp + 0.9);
   if (o.basic && p.cls === "duelist") p.hp = Math.min(p.maxhp, p.hp + 0.5);
   text(e.x + rnd(-10, 10), e.y - e.r - 14, Math.round(dmg), crit ? [255, 214, 90] : [255, 248, 230], crit);
@@ -182,6 +199,10 @@ function killEnemy(e) {
   for (let i = 0; i < Math.min(8, xp); i++) GS.gems.push({ x: e.x + rnd(-14, 14), y: e.y + rnd(-14, 14), v: Math.max(1, Math.round(xp / Math.min(8, xp))), t: 0 });
   if (Math.random() < (e.boss ? 1 : 0.015)) GS.gems.push({ x: e.x, y: e.y, heart: true, t: 0 });
   if (e.kind === "slime") for (let i = 0; i < 2; i++) spawnEnemy("slimelet", e.x + rnd(-20, 20), e.y + rnd(-20, 20));
+  const rm = roomAt(e.x, e.y);
+  if (rm && rm.props && Math.random() < (hasItem("clover") ? 0.2 : 0.1)) rm.props.push({ type: "coin", x: e.x, y: e.y, r: 10, hp: 0 });
+  if (rm && rm.props && e.boss) for (let i = 0; i < 10; i++) rm.props.push({ type: "coin", x: e.x + rnd(-60, 60), y: e.y + rnd(-60, 60), r: 10, hp: 0 });
+  if (hasItem("bomb") && !e.boss) { ring(e.x, e.y, 70, [255, 150, 70], 0.3); for (const o of GS.enemies) if (o !== e && !o.dead && (o.x - e.x) ** 2 + (o.y - e.y) ** 2 < 70 * 70) setTimeout(() => !o.dead && hitEnemy(o, 12 * GS.player.dmgMult), 0); }
   if (e.boss) {
     GS.boss = null; GS.shake = 14; AUDIO.play("boom");
     if (GS.extra.length < DATA.extra.length) GS.cardQueue.push("unlock");
@@ -191,10 +212,12 @@ function killEnemy(e) {
 function hurtPlayer(dmg) {
   const p = GS.player;
   if (p.inv > 0 || p.dashT > 0 || GS.mode !== "play") return;
+  if (hasItem("arkshield") && !p.shieldUsed) { p.shieldUsed = true; p.inv = 0.6; ring(p.x, p.y - 20, 50, [150, 210, 255], 0.4); text(p.x, p.y - 60, L("щит!", "shield!"), [170, 220, 255], true); return; }
   dmg *= 1 - p.armor;
   p.hp -= dmg; p.inv = 0.55; p.hurtFlash = 0.25; GS.shake = Math.max(GS.shake, 5);
   text(p.x, p.y - 60, "-" + Math.round(dmg), [255, 90, 90], true);
   AUDIO.play("hurt");
+  if (p.hp <= 0 && hasItem("phoenix") && !p.revived) { p.revived = true; p.hp = p.maxhp * 0.5; p.inv = 2; burst(p.x, p.y - 20, [255, 170, 80], 50, 320); GS.banner = { title: L("Феникс!", "Phoenix!"), sub: L("Ты восстал из пепла", "You rose from the ashes"), t: 2 }; return; }
   if (p.hp <= 0) { p.hp = 0; GS.mode = "dead"; GS.deadT = 0; saveBest(); }
 }
 function saveBest() { const f = (GS.floor ? GS.floor.fi : 0) + 1, b = SAVE.get("bestFloor", 0); if (f > b) SAVE.set("bestFloor", f); }
@@ -308,6 +331,7 @@ function basicAttack(dt) {
     const R = p.cls === "warrior" ? 105 : 82, arc = p.cls === "warrior" ? 1.9 : 2.4, dmg = (p.cls === "warrior" ? 30 : 13) * dm;
     const hits = p.cls === "duelist" ? 2 : 1;
     const a0 = Math.atan2(near.y - p.y, near.x - p.x);
+    hitProps(p.x + Math.cos(a0) * R * 0.6, p.y + Math.sin(a0) * R * 0.6, R * 0.6);
     for (let h = 0; h < hits; h++) setTimeout(() => {
       if (GS.mode !== "play") return;
       GS.rings.push({ x: p.x, y: p.y - 18, r: R, col: p.cls === "warrior" ? [255, 240, 220] : [255, 190, 220], life: 0.18, max: 0.18, arc: [a0 - arc / 2, a0 + arc / 2] });
@@ -446,13 +470,25 @@ function spawnEnemy(kind, x, y, boss = false) {
     speed: D.speed * (boss ? 0.95 : 1.18), boss, flash: 0, stun: 0, slow: 1, slowT: 0, burnT: 0, burnDps: 0, kx: 0, ky: 0, t: rnd(0, 6), atk: rnd(1, 3),
     col: mixc(A.monster, base, 0.35), curseUntil: 0, ranged: RANGED.has(kind), pattern: 0 };
   e.maxhp = e.hp;
+  unstick(e);
   GS.enemies.push(e);
   if (boss) { GS.boss = e; e.name = nm(D); }
   return e;
 }
+// враг не должен застрять в яме, камне или стене — иначе комнату не зачистить
+function unstick(e) {
+  if (!GS.floor || walkable(e.x, e.y, e.r * 0.6)) return;
+  const m = roomAt(e.x, e.y) || GS.cur || GS.floor.rooms[0];
+  for (let k = 0; k < 40; k++) {
+    const [x, y] = randomInRoom(m, GS.player, 160);
+    if (walkable(x, y, e.r * 0.6)) { e.x = x; e.y = y; return; }
+  }
+  e.x = m.cx; e.y = m.cy;
+}
 function enemyTick(e, dt) {
   const p = GS.player;
   e.t += dt; e.flash -= dt;
+  if (!walkable(e.x, e.y, e.r * 0.6)) { e.stuckT = (e.stuckT || 0) + dt; if (e.stuckT > 0.8) { e.stuckT = 0; unstick(e); } } else e.stuckT = 0;
   if (e.burnT > 0) { e.burnT -= dt; e.hp -= e.burnDps * dt; if (Math.random() < 0.3) GS.parts.push({ x: e.x + rnd(-6, 6), y: e.y - e.r, vx: 0, vy: -50, life: 0.4, max: 0.4, col: [255, 140, 60], size: 3, g: true }); if (e.hp <= 0) return killEnemy(e); }
   if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 1; }
   if (e.kx || e.ky) moveIn(e, e.x + e.kx * dt, e.y + e.ky * dt, e.r * 0.6); e.kx *= Math.pow(0.02, dt); e.ky *= Math.pow(0.02, dt);
@@ -600,8 +636,9 @@ function rollCards(kind) {
   for (const k in PERKS) if ((p.perks[k] || 0) < PERKS[k][4]) extras.push({ type: "perk", k, rar: 0, title: L(PERKS[k][0], PERKS[k][1]), tag: L("ГЕРОЙ", "HERO"), desc: L(PERKS[k][2], PERKS[k][3]) });
   for (const k in BASIC_UPS) if ((p.basic[k] || 0) < BASIC_UPS[k][2]) extras.push({ type: "basic", k, rar: 0, title: L(BASIC_UPS[k][0], BASIC_UPS[k][1]), tag: L("АТАКА", "ATTACK"), desc: L("Улучшает основную атаку героя.", "Improves the hero's basic attack.") });
   out.push(pick(extras));
+  if (hasItem("crown") && pool[3]) out.push(pool[3]);
   if (Math.random() < 0.5 && pool[2]) out.push(pool[2]); else if (extras.length > 1) out.push(pick(extras.filter((x) => x !== out[2])));
-  return out.slice(0, 3);
+  return out.slice(0, hasItem("crown") ? 4 : 3);
 }
 function openCards() {
   if (!GS.cardQueue.length) return;
@@ -631,7 +668,7 @@ function chooseCard(i) {
 function update(dt) {
   GS.t += dt;
   if (GS.hitstop > 0 && GS.mode === "play") { GS.hitstop -= dt; return; }
-  if (GS.mode !== "play") { if (GS.mode === "cards") GS.cardT += dt; if (GS.mode === "dead") GS.deadT += dt; return; }
+  if (GS.mode !== "play") { if (GS.mode === "story") GS.storyT += dt; if (GS.mode === "cards") GS.cardT += dt; if (GS.mode === "dead") GS.deadT += dt; return; }
   GS.time += dt;
   const p = GS.player;
   p.t += dt; p.inv -= dt; p.invis -= dt; p.atk = Math.max(0, p.atk - dt * 4); p.hurtFlash -= dt;
@@ -676,6 +713,7 @@ function update(dt) {
   if (GS.banner) { GS.banner.t -= dt; if (GS.banner.t <= 0) GS.banner = null; }
   GS.shake = Math.max(0, GS.shake - 30 * dt);
   roomTick(dt);
+  isaacTick(dt);
   if (GS.comboT > 0) { GS.comboT -= dt; if (GS.comboT <= 0) GS.combo = 0; }
   // камера
   const Z = zoom(), vw = V.W / Z, vh = V.H / Z;
@@ -704,7 +742,8 @@ function projTick(dt) {
         if (q.split) for (let i = 0; i < q.split; i++) shoot(q.x, q.y, rnd(0, 6.28), { dmg: q.dmg * 0.4, speed: 450, size: Math.max(3, q.r * 0.6), col: q.col, life: 0.5 });
       }
     } else if ((p.x - q.x) ** 2 + (p.y - 20 - q.y) ** 2 < (p.r + q.r) ** 2) { hurtPlayer(q.dmg); q.life = 0; }
-    if (!walkable(q.x, q.y, 0)) { if (q.life > 0 && q.explode && q.friendly) q.life = 0.0001; else q.life = 0; }
+    if (q.friendly && hitProps(q.x, q.y, q.r)) { q.pierce--; if (q.pierce <= 0) q.life = 0; }
+    if (!walkable(q.x, q.y, 0, true)) { if (q.life > 0 && q.explode && q.friendly) q.life = 0.0001; else q.life = 0; }
   }
   GS.projs = GS.projs.filter((q) => q.life > 0);
 }

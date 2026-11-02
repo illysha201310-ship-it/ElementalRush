@@ -253,6 +253,7 @@ function drawHUD() {
   txt(L(dn[0], dn[1]) + (phone ? "" : "  [Space]"), dcx, dcy + dr + 12, phone ? 16 : 11, "#ffe7b0", "center");
   if (phone) { BUTTONS.push([dx, dy, 140, 140, () => { IN.dash = true; }, "touch"]); }
   drawMinimap();
+  drawItemsHUD();
   const tg = nextTarget();
   if (tg && !GS.cur) {
     const Z = zoom(), sx2 = (tg.x - GS.cam.x) * Z, sy2 = (tg.y - GS.cam.y) * Z;
@@ -408,6 +409,7 @@ function drawEnd(win) {
 function onKey(code) {
   if (GS.mode === "cards" && /^Digit[1-4]$/.test(code) && GS.cardT > 0.5) chooseCard(+code.slice(5) - 1);
   if (code === "Escape") { if (GS.mode === "play") GS.mode = "pause"; else if (GS.mode === "pause") GS.mode = "play"; }
+  if (GS.mode === "story" && (code === "Space" || code === "Enter")) { GS.storyI++; GS.storyT = 0; IN.dash = false; if (GS.storyI >= STORY.length) { GS.mode = "play"; openCards(); } }
   if (GS.mode === "menu" && code === "Enter") { if (MENU.screen === "title") MENU.screen = "heroes"; else startRun(); }
 }
 
@@ -423,8 +425,8 @@ function frame(now) {
   if (GS.mode === "menu") { GS.t += dt; MENU.screen === "heroes" ? drawHeroes() : drawTitle(); }
   else {
     update(dt);
-    drawWorld(dt);
-    drawHUD();
+    if (GS.mode === "story") drawStory();
+    else { drawWorld(dt); drawHUD(); }
     if (GS.mode === "cards") drawCards();
     if (GS.mode === "pause") drawPause();
     if (GS.mode === "dead") drawEnd(false);
